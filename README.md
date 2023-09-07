@@ -8,7 +8,9 @@ over coaxial or twisted pair serial links. This repository is the root starting 
 
 For faster evaluation check out the **SD Card Image** for your platform.
 
-More details on how to extract a compressed image and write it on the SD card on Linux and Windows can be found here: [Writing an image onto the SD card](http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md)
+More details on how to extract a compressed image and write it on the SD card on Linux and Windows can be found [here][sdcard-burn].
+
+[sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
 
 For more details on hardware setup and testing check out the **User Guide** for your platform.
 
