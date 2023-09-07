@@ -19,8 +19,8 @@ For more details on development environment setup and building check out the **B
 | Platform                       | User Guide         | SD Card Image               | Build Instructions         |
 | ------------------------------ | ------------------ | --------------------------- | -------------------------- |
 | Raspberry Pi                   | [User Guide][ug-0] | [![Download][dlsh-0]][dl-0] | [Build Instructions][bi-0] |
-| AMD KV260                      | [User Guide][ug-1] | [![Download][dlsh-2]][dl-1] | [Build Instructions][bi-1] |
-| Nvidia Orin Nano Developer Kit | [User Guide][ug-2] | [![Download][dlsh-3]][dl-2] | [Build Instructions][bi-2] |
+| AMD KV260                      | [User Guide][ug-1] | [![Download][dlsh-1]][dl-1] | [Build Instructions][bi-1] |
+| Nvidia Orin Nano Developer Kit | [User Guide][ug-2] | [![Download][dlsh-2]][dl-2] | [Build Instructions][bi-2] |
 
 [ug-0]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_rpi
 [ug-1]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_amd_kria
