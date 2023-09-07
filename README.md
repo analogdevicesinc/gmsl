@@ -35,7 +35,7 @@ For more details on development environment setup and building check out the **B
 
 [dlsh-0]: https://img.shields.io/badge/release-RPI_Image-blue.svg
 [dlsh-1]: https://img.shields.io/badge/release-ZCU102_Image-blue.svg
-[dlsh-2]: https://img.shields.io/badge/release-Kria_Image-blue.svg
+[dlsh-2]: https://img.shields.io/badge/release-KV260_Image-blue.svg
 [dlsh-3]: https://img.shields.io/badge/release-Nvidia_Orin_Nano_Image-blue.svg
 
 [dl-0]: #none
