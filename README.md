@@ -34,6 +34,6 @@ For more details on development environment setup and building check out the **B
 [dlsh-1]: https://img.shields.io/badge/release-KV260_Image-blue.svg
 [dlsh-2]: https://img.shields.io/badge/release-Nvidia_Orin_Nano_Image-blue.svg
 
-[dl-0]: #none
+[dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-g67e0a5b77cd6.zip
 [dl-1]: #none
 [dl-2]: #none
