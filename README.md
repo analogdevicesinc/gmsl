@@ -36,4 +36,4 @@ For more details on development environment setup and building check out the **B
 
 [dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-g67e0a5b77cd6.tar.xz
 [dl-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kria-2eb64424cc31.tar.xz
-[dl-2]: #none
+[dl-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano.img.tar.xz
