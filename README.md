@@ -22,13 +22,17 @@ getting the source code, setting up the development environments and building th
 For faster evaluation check out the **SD Card Image** for your platform.
 More details on how to extract a compressed image and write it on the SD card on Linux and Windows can be found [here][sdcard-burn].
 
-| Platform                       | Documentation                                      | Downloads                   |
-| ------------------------------ | ---------------------------------------------------| --------------------------- |
-| Raspberry Pi                   | [User Guide][ug-0] <br> [Build Instructions][bi-0] | [![Download][dlsh-0]][dl-0] |
-| AMD KV260                      | [User Guide][ug-1] <br> [Build Instructions][bi-1] | [![Download][dlsh-1]][dl-1] |
-| Nvidia Orin Nano Developer Kit | [User Guide][ug-2] <br> [Build Instructions][bi-2] | [![Download][dlsh-2]][dl-2] |
+| Platform                               | Documentation                                      | Downloads                   |
+| -------------------------------------- | ---------------------------------------------------| --------------------------- |
+| [Raspberry Pi 4][pl-0]                 | [User Guide][ug-0] <br> [Build Instructions][bi-0] | [![Download][dlsh-0]][dl-0] |
+| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Build Instructions][bi-1] | [![Download][dlsh-1]][dl-1] |
+| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Build Instructions][bi-2] | [![Download][dlsh-2]][dl-2] |
 
 [sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
+
+[pl-0]: https://www.raspberrypi.com/products/raspberry-pi-4-model-b/
+[pl-1]: https://www.xilinx.com/products/som/kria/kv260-vision-starter-kit.html
+[pl-2]: https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/
 
 [ug-0]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_rpi
 [ug-1]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_amd_kria
