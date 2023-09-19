@@ -22,7 +22,7 @@ getting the source code, setting up the development environments and building th
 For faster evaluation check out the **SD Card Image** for your platform.
 More details on how to extract a compressed image and write it on the SD card on Linux and Windows can be found [here][sdcard-burn].
 
-| Platform                       | Documentation                                      | SD Card Image               |
+| Platform                       | Documentation                                      | Downloads                   |
 | ------------------------------ | ---------------------------------------------------| --------------------------- |
 | Raspberry Pi                   | [User Guide][ug-0] <br> [Build Instructions][bi-0] | [![Download][dlsh-0]][dl-0] |
 | AMD KV260                      | [User Guide][ug-1] <br> [Build Instructions][bi-1] | [![Download][dlsh-1]][dl-1] |
