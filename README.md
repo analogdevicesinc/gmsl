@@ -24,9 +24,9 @@ More details on how to extract a compressed image and write it on the SD card on
 
 | Platform                               | Documentation                                      | Downloads                   |
 | -------------------------------------- | ---------------------------------------------------| --------------------------- |
-| [Raspberry Pi 4][pl-0]                 | [User Guide][ug-0] <br> [Build Instructions][bi-0] | [![Download][dlsh-0]][dl-0] |
-| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Build Instructions][bi-1] | [![Download][dlsh-1]][dl-1] |
-| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Build Instructions][bi-2] | [![Download][dlsh-2]][dl-2] |
+| [Raspberry Pi 4][pl-0]                 | [User Guide][ug-0] <br> [Build Instructions][bi-0] | [![Download][dlsh-0]][dl-0] <br> [![sha256sum][shash-0]][sha-0] |
+| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Build Instructions][bi-1] | [![Download][dlsh-1]][dl-1] <br> [![sha256sum][shash-0]][sha-1] |
+| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Build Instructions][bi-2] | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] |
 
 [sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
 
@@ -49,3 +49,9 @@ More details on how to extract a compressed image and write it on the SD card on
 [dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-g67e0a5b77cd6.tar.xz
 [dl-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kria-2eb64424cc31.tar.xz
 [dl-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano.img.tar.xz
+
+[shash-0]: https://img.shields.io/badge/sha256sum-yellow.svg
+
+[sha-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-g67e0a5b77cd6-sha256sum.txt
+[sha-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kria-2eb64424cc31-sha256sum.txt
+[sha-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano-sha256sum.txt
