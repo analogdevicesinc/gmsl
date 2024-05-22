@@ -1,0 +1,40 @@
+cmake_minimum_required(VERSION 3.8)
+project(video_receiver)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+include_directories(
+  include
+  ${rclcpp_INCLUDE_DIRS}
+  ${sensor_msgs_INCLUDE_DIRS}
+  ${cv_bridge_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+)
+
+add_executable(video_receiver src/video_receiver.cpp)
+
+ament_target_dependencies(video_receiver
+  rclcpp
+  sensor_msgs
+  cv_bridge
+  OpenCV
+)
+
+target_link_libraries(video_receiver
+  ${OpenCV_LIBRARIES}
+)
+
+install(TARGETS
+  video_receiver
+  DESTINATION lib/${PROJECT_NAME}
+)
+
