@@ -1,0 +1,2 @@
+The gstreamer tramsitter used 1280x720 resolution:
+gst-launch-1.0 v4l2src device=/dev/video0 ! videoscale ! video/x-raw,width=1280,height=720 ! videoconvert ! rtpvrawpay mtu=16334 ! udpsink host=127.0.0.1 port="5004"
