@@ -46,12 +46,17 @@ struct Packet {
 
 class RTPVideoReceiverNode : public rclcpp::Node {
 public:
-    RTPVideoReceiverNode() 
-    : Node("rtp_video_receiver_node"), 
-      socket_(io_service_, udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 5004)),
+    RTPVideoReceiverNode()
+    : Node("rtp_video_receiver_node"),
+      ip(this->declare_parameter<std::string>("ip", "127.0.0.1")),
+      port(this->declare_parameter<int>("port", 5004)),
+      width(this->declare_parameter<int>("width", 1280)),
+      height(this->declare_parameter<int>("height", 720)),
+      topic(this->declare_parameter<std::string>("topic", "cam0")),
+      socket_(io_service_, udp::endpoint(boost::asio::ip::address::from_string(ip), port)),
+      image_pub_(this->create_publisher<sensor_msgs::msg::Image>(topic, 100)),
+      processing_thread_(&RTPVideoReceiverNode::process_packets, this),
       stop_processing_(false) {
-        image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("video_frames", 100);
-        processing_thread_ = std::thread(&RTPVideoReceiverNode::process_packets, this);
     }
 
     ~RTPVideoReceiverNode() {
@@ -63,8 +68,8 @@ public:
     }
 
     void receive_packets() {
-        udp::endpoint sender_endpoint; 
-        std::array<uint8_t, 16334> recv_buffer; 
+        udp::endpoint sender_endpoint;
+        std::array<uint8_t, 16334> recv_buffer;
 
         while (rclcpp::ok()) {
             size_t length = socket_.receive_from(boost::asio::buffer(recv_buffer), sender_endpoint);
@@ -78,78 +83,78 @@ public:
     }
 
 private:
+    std::string ip;
+    int port;
+    int width;
+    int height;
+    std::string topic;
     boost::asio::io_service io_service_;
     udp::socket socket_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
-    int width = 1280;
-    int height = 720;
-
     std::queue<Packet> packet_buffer_;
     std::mutex buffer_mutex_;
     std::condition_variable cond_var_;
     std::thread processing_thread_;
     bool stop_processing_;
-    std::map<int, std::vector<uint8_t>> frame_data_;
 
     void process_packets() {
+        const size_t EXT_SEQ_NO_LENGTH = 2;
+        const size_t PAYLOAD_HEADER_LENGTH = 6;
+        const size_t FRAME_WIDTH = 2 * this->width;
+        std::vector<uint8_t> payload;
+        std::pair<int, std::vector<PayloadHeader>> payload_headers;
+        size_t payload_offset;
+        std::vector<uint8_t> frame_data(this->height * FRAME_WIDTH, 0);
+        std::vector<std::vector<uint8_t>> frame_data_(this->height, std::vector<uint8_t>(FRAME_WIDTH, 0));
+        std::vector<uint8_t> line_data;
+        cv::Mat yuv_image;
+        cv::Mat bgr_image;
+        sensor_msgs::msg::Image::SharedPtr img_msg;
+
         while (!stop_processing_) {
             std::unique_lock<std::mutex> lock(buffer_mutex_);
             cond_var_.wait(lock, [this] { return !packet_buffer_.empty() || stop_processing_; });
 
-            if (stop_processing_) break;
+            if (stop_processing_) {
+                RCLCPP_WARN(this->get_logger(), "Processing stopped");
+                break;
+            }
 
-            Packet packet = packet_buffer_.front();
+            Packet packet = std::move(packet_buffer_.front());
             packet_buffer_.pop();
+
             lock.unlock();
 
-            std::vector<uint8_t> payload = extract_payload(packet.data.data(), packet.length);
-            auto [extended_sequence_number, headers] = extract_payload_headers(payload);
+            payload = extract_payload(packet.data.data(), packet.length);
+            payload_headers = extract_payload_headers(payload);
+            payload_offset = EXT_SEQ_NO_LENGTH + payload_headers.second.size() * PAYLOAD_HEADER_LENGTH;
 
-            size_t payload_header_length = 2 + headers.size() * 6;
-            size_t offset = payload_header_length;
-
-            for (const auto& header : headers) {
-                if (offset + header.length <= payload.size()) {
-                    std::vector<uint8_t> line_data(payload.begin() + offset, payload.begin() + offset + header.length);
-
-                    if (frame_data_.find(header.line_no) == frame_data_.end()) {
-                        frame_data_[header.line_no].resize(2 * this->width);
-                    }
-
-                    if (header.length < (2 * this->width)) {
-                        auto& frame_data = frame_data_[header.line_no];
-                        std::copy(line_data.begin(), line_data.end(), frame_data.begin() + 2 * header.offset);
-                    } else {
-                        frame_data_[header.line_no] = std::move(line_data);
-                    }
-                } else {
+            for (const auto& header : payload_headers.second) {
+                if (payload_offset + header.length > payload.size()) {
                     RCLCPP_ERROR(this->get_logger(), "Offset and length exceed payload size");
+                    continue;
                 }
 
-                offset += header.length;
+                line_data.assign(payload.begin() + payload_offset, payload.begin() + payload_offset + header.length);
+                std::vector<uint8_t>& frame_data_line = frame_data_[header.line_no];
+
+                if (header.length < FRAME_WIDTH) {
+                    std::copy(line_data.begin(), line_data.end(), frame_data_line.begin() + 2 * header.offset);
+                } else {
+                    frame_data_line = std::move(line_data);
+                }
+
+                payload_offset += header.length;
 
                 if (header.line_no == (this->height - 1)) {
-                    //RCLCPP_INFO(this->get_logger(), "End of Frame");
-
-                    size_t total_size = 0;
-                    for (const auto& pair : frame_data_) {
-                        total_size += pair.second.size();
+                    for (size_t i = 0; i < frame_data_.size(); ++i) {
+                        std::copy(frame_data_[i].begin(), frame_data_[i].end(), frame_data.begin() + i * FRAME_WIDTH);
                     }
 
-                    std::vector<uint8_t> frame_data;
-                    frame_data.reserve(total_size);
-
-                    for (const auto& pair : frame_data_) {
-                        frame_data.insert(frame_data.end(), pair.second.begin(), pair.second.end());
-                    }
-
-                    cv::Mat yuv_image(this->height, this->width, CV_8UC2, frame_data.data());
-                    cv::Mat bgr_image;
+                    yuv_image = cv::Mat(this->height, this->width, CV_8UC2, frame_data.data());
                     cv::cvtColor(yuv_image, bgr_image, cv::COLOR_YUV2BGR_UYVY);
-                    sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr_image).toImageMsg();
+                    img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr_image).toImageMsg();
                     image_pub_->publish(*img_msg);
-
-                    frame_data_.clear();
                 }
             }
         }
@@ -228,14 +233,14 @@ private:
                     header.length, static_cast<int>(header.F), header.line_no, static_cast<int>(header.C), header.offset);
     }
 
-    void write_frame_data_to_file(const std::map<int, std::vector<uint8_t>>& frame_data_) {
+    void write_frame_data_to_file(const std::vector<std::vector<uint8_t>>& frame_data_) {
         std::filesystem::path file_path = std::filesystem::path(__FILE__).parent_path() / "frame_data.txt";
         std::ofstream file(file_path);
         if (file.is_open()) {
             file << "End of Frame\n";
-            for (const auto& pair : frame_data_) {
-                file << std::dec << "Line No: " << pair.first << " | Length: " << pair.second.size() << "\n";
-                for (const auto& byte : pair.second) {
+            for (size_t i = 0; i < frame_data_.size(); ++i) {
+                file << std::dec << "Line No: " << i << " | Length: " << frame_data_[i].size() << "\n";
+                for (const auto& byte : frame_data_[i]) {
                     file << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << " ";
                 }
                 file << "\n";
