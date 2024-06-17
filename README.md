@@ -27,16 +27,19 @@ More details on how to extract a compressed image and write it on the SD card on
 | [Raspberry Pi 4][pl-0]                 | [User Guide][ug-0] <br> [Source code][bi-0] | [![Download][dlsh-0]][dl-0] <br> [![sha256sum][shash-0]][sha-0] |
 | [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Source code][bi-1] | [![Download][dlsh-1]][dl-1] <br> [![sha256sum][shash-0]][sha-1] |
 | [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Source code][bi-2] | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] |
+| [AD-GMSL522-SL][pl-3]                  | [User Guide][ug-3] <br> [Source code][bi-2] | <br> |
 
 [sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
 
 [pl-0]: https://www.raspberrypi.com/products/raspberry-pi-4-model-b/
 [pl-1]: https://www.xilinx.com/products/som/kria/kv260-vision-starter-kit.html
 [pl-2]: https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/
+[pl-3]: https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/ad-gmsl522-sl.html#eb-overview
 
 [ug-0]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_rpi
 [ug-1]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_amd_kria
 [ug-2]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_nvidia_jetson_orin_nano
+[ug-3]: https://wiki.analog.com/resources/eval/user-guides/ad-gmsl522-sl
 
 [bi-0]: https://github.com/analogdevicesinc/linux/blob/gmsl/rpi-6.1.y/README-GMSL.md
 [bi-1]: https://github.com/analogdevicesinc/linux/blob/gmsl/xilinx_v6.1_LTS/README-GMSL.md
