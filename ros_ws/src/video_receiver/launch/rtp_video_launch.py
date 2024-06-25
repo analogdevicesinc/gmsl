@@ -4,7 +4,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     nodes = []
 
-    for i in range(7):
+    for i in range(8):
         node = Node(
             package='video_receiver',
             executable='video_receiver',
@@ -14,7 +14,8 @@ def generate_launch_description():
             {'port': 8420 + i},
             {'topic': f'cam{i}'},
             {'width': 1920},
-            {'height': 1280}
+            {'height': 1280},
+            {'timestamp_config': 0}
             ]
         )
         nodes.append(node)

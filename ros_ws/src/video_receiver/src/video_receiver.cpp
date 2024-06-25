@@ -27,7 +27,7 @@ typedef struct _RTPHeader {
     unsigned int seq : 16;
     unsigned int timestamp : 32;
     unsigned int ssrc : 32;
-    uint8_t csrclist[4];
+    unsigned int csrclist : 32;
 } RTPHeader;
 
 struct PayloadHeader {
@@ -54,6 +54,7 @@ public:
       width(this->declare_parameter<int>("width", 1920)),
       height(this->declare_parameter<int>("height", 1280)),
       topic(this->declare_parameter<std::string>("topic", "cam0")),
+      timestamp_config(this->declare_parameter<int>("timestamp_config", 0)),
       socket_(io_service_, udp::endpoint(boost::asio::ip::address::from_string(ip), port)),
       image_pub_(this->create_publisher<sensor_msgs::msg::Image>(topic, 100)),
       processing_thread_(&RTPVideoReceiverNode::process_packets, this),
@@ -89,6 +90,7 @@ private:
     int width;
     int height;
     std::string topic;
+    int timestamp_config; // 0 - default, 1 - custom (header: timestamp + ssrc + csrclist)
     boost::asio::io_service io_service_;
     udp::socket socket_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
@@ -163,7 +165,8 @@ private:
 
     RTPHeader parse_rtp_header(const uint8_t* data, size_t length) {
         RTPHeader header = {};
-        if (length < 12) {
+        int min_length = static_cast<int>((this->timestamp_config) ? 16 : 12);
+        if (static_cast<int>(length) < min_length) {
             RCLCPP_ERROR(this->get_logger(), "Received packet too short to contain RTP header.");
             return header;
         }
@@ -177,12 +180,13 @@ private:
         header.seq = (data[2] << 8) | data[3];
         header.timestamp = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
         header.ssrc = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+        header.csrclist = (this->timestamp_config) ? ((data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15]) : 0;
 
         return header;
     }
 
     std::vector<uint8_t> extract_payload(const uint8_t* data, int length) {
-        int rtp_header_length = 12;
+        int rtp_header_length = (this->timestamp_config) ? 16 : 12;
         std::vector<uint8_t> payload(data + rtp_header_length, data + length);
         return payload;
     }
@@ -225,13 +229,30 @@ private:
     }
     
    void print_header(const RTPHeader& header) {
-        RCLCPP_INFO(this->get_logger(), "RTP Header: V=%u, P=%d, X=%d, CC=%u, M=%d, PT=%u, Seq=%u, TS=%u, SSRC=%u",
-                    header.version, header.padding, header.extension, header.csrc_count, header.marker, header.payload_type, header.seq, header.timestamp, header.ssrc);
+        RCLCPP_INFO(this->get_logger(), "RTP Header: V=%u, P=%d, X=%d, CC=%u, M=%d, PT=%u, Seq=%u, TS=%u, SSRC=%u, CSRCL=%u",
+                    header.version, header.padding, header.extension, header.csrc_count, header.marker, header.payload_type, header.seq, header.timestamp, header.ssrc, header.csrclist);
     }
 
     void print_payload_header(const PayloadHeader& header) {
         RCLCPP_INFO(this->get_logger(), "Length: %d | F: %d | Line No: %d | C: %d | Offset: %d",
                     header.length, static_cast<int>(header.F), header.line_no, static_cast<int>(header.C), header.offset);
+    }
+
+    void print_timestamp_date(const RTPHeader& header) {
+        uint64_t timestamp_in_seconds = (static_cast<uint64_t>(header.timestamp) << 16) | (header.ssrc >> 16);
+        uint32_t nano_sec = (header.ssrc & 0x0000FFFF) | (header.csrclist & 0xFFFF0000);
+        uint16_t fraction_nano_sec = (header.csrclist << 16) & 0xFFFF;
+
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(timestamp_in_seconds);
+        std::time_t tt = std::chrono::system_clock::to_time_t(tp);
+        std::tm* tm = std::gmtime(&tt);
+
+        // Print the date
+        RCLCPP_INFO(this->get_logger(), "Timestamp Date: %d-%02d-%02d %02d:%02d:%02d",
+                    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+        // Print the nano seconds and fraction nano seconds
+        RCLCPP_INFO(this->get_logger(), "Nano Sec: %u | Fraction Nano Sec: %u", nano_sec, fraction_nano_sec);
     }
 
     void write_frame_data_to_file(const std::vector<std::vector<uint8_t>>& frame_data_) {
