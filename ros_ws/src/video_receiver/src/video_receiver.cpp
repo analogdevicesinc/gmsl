@@ -42,16 +42,17 @@ struct Packet {
     std::vector<uint8_t> data;
     size_t length;
     unsigned int seq;
+    unsigned int marker;
 };
 
 class RTPVideoReceiverNode : public rclcpp::Node {
 public:
     RTPVideoReceiverNode()
     : Node("rtp_video_receiver_node"),
-      ip(this->declare_parameter<std::string>("ip", "127.0.0.1")),
-      port(this->declare_parameter<int>("port", 5004)),
-      width(this->declare_parameter<int>("width", 1280)),
-      height(this->declare_parameter<int>("height", 720)),
+      ip(this->declare_parameter<std::string>("ip", "10.42.0.1")),
+      port(this->declare_parameter<int>("port", 8420)),
+      width(this->declare_parameter<int>("width", 1920)),
+      height(this->declare_parameter<int>("height", 1280)),
       topic(this->declare_parameter<std::string>("topic", "cam0")),
       socket_(io_service_, udp::endpoint(boost::asio::ip::address::from_string(ip), port)),
       image_pub_(this->create_publisher<sensor_msgs::msg::Image>(topic, 100)),
@@ -76,7 +77,7 @@ public:
             if (length > 0) {
                 RTPHeader rtp_header = parse_rtp_header(recv_buffer.data(), length);
                 std::lock_guard<std::mutex> lock(buffer_mutex_);
-                packet_buffer_.push({std::vector<uint8_t>(recv_buffer.begin(), recv_buffer.begin() + length), length, rtp_header.seq});
+                packet_buffer_.push({std::vector<uint8_t>(recv_buffer.begin(), recv_buffer.begin() + length), length, rtp_header.seq, rtp_header.marker});
                 cond_var_.notify_one();
             }
         }
@@ -146,7 +147,7 @@ private:
 
                 payload_offset += header.length;
 
-                if (header.line_no == (this->height - 1)) {
+                if (packet.marker == 1 || header.line_no == (this->height - 1)) {
                     for (size_t i = 0; i < frame_data_.size(); ++i) {
                         std::copy(frame_data_[i].begin(), frame_data_[i].end(), frame_data.begin() + i * FRAME_WIDTH);
                     }
