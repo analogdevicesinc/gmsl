@@ -108,8 +108,6 @@ private:
         std::pair<int, std::vector<PayloadHeader>> payload_headers;
         size_t payload_offset;
         std::vector<uint8_t> frame_data(this->height * FRAME_WIDTH, 0);
-        std::vector<std::vector<uint8_t>> frame_data_(this->height, std::vector<uint8_t>(FRAME_WIDTH, 0));
-        std::vector<uint8_t> line_data;
         cv::Mat yuv_image;
         cv::Mat bgr_image;
         sensor_msgs::msg::Image::SharedPtr img_msg;
@@ -138,22 +136,12 @@ private:
                     continue;
                 }
 
-                line_data.assign(payload.begin() + payload_offset, payload.begin() + payload_offset + header.length);
-                std::vector<uint8_t>& frame_data_line = frame_data_[header.line_no];
-
-                if (header.length < FRAME_WIDTH) {
-                    std::copy(line_data.begin(), line_data.end(), frame_data_line.begin() + 2 * header.offset);
-                } else {
-                    frame_data_line = std::move(line_data);
-                }
+                std::copy(payload.begin() + payload_offset, payload.begin() + payload_offset + header.length,
+                frame_data.begin() + header.line_no * FRAME_WIDTH + 2 * header.offset);
 
                 payload_offset += header.length;
 
                 if (packet.marker == 1 || header.line_no == (this->height - 1)) {
-                    for (size_t i = 0; i < frame_data_.size(); ++i) {
-                        std::copy(frame_data_[i].begin(), frame_data_[i].end(), frame_data.begin() + i * FRAME_WIDTH);
-                    }
-
                     yuv_image = cv::Mat(this->height, this->width, CV_8UC2, frame_data.data());
                     cv::cvtColor(yuv_image, bgr_image, cv::COLOR_YUV2BGR_UYVY);
                     img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr_image).toImageMsg();
