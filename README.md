@@ -22,13 +22,13 @@ getting the source code, setting up the development environments and building th
 For faster evaluation check out the **SD Card Image** for your platform.
 More details on how to extract a compressed image and write it on the SD card on Linux and Windows can be found [here][sdcard-burn].
 
-| Platform                               | Collateral                                      | Downloads                   |
-| -------------------------------------- | ---------------------------------------------------| --------------------------- |
-| [Raspberry Pi 4][pl-0]                 | [User Guide][ug-0] <br> [Source code][bi-0] | [![Download][dlsh-0]][dl-0] <br> [![sha256sum][shash-0]][sha-0] |
-| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Source code][bi-1] | [![Download][dlsh-1]][dl-1] <br> [![sha256sum][shash-0]][sha-1] |
-| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Source code][bi-2] | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] |
-| [AD-GMSL522-SL][pl-3]                  | [User Guide][ug-3] <br> [Source code][bi-2] | <br> |
-| [AD-GMSL2ETH-SL][pl-4]                 | [User Guide][ug-4] <br> [Source code][bi-3] | <br> |
+| Platform                               | Collateral                                                         | Downloads                   |
+| -------------------------------------- | ------------------------------------------------------------------ | --------------------------- |
+| [Raspberry Pi 4][pl-0]                 | [User Guide][ug-0] <br> [Source code][bi-0]                        | [![Download][dlsh-0]][dl-0] <br> [![sha256sum][shash-0]][sha-0] |
+| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Source code][bi-1]                        | [![Download][dlsh-1]][dl-1] <br> [![sha256sum][shash-0]][sha-1] |
+| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Source code][bi-2]                        | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] |
+| [AD-GMSL522-SL][pl-3]                  | [User Guide][ug-3] <br> [Source code][bi-2] <br> [Tools][tool-3]   | <br> |
+| [AD-GMSL2ETH-SL][pl-4]                 | [User Guide][ug-4] <br> [Source code][bi-3]                        | <br> |
 
 [sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
 
@@ -48,6 +48,8 @@ More details on how to extract a compressed image and write it on the SD card on
 [bi-1]: https://github.com/analogdevicesinc/linux/blob/gmsl/xilinx_v6.1_LTS/README-GMSL.md
 [bi-2]: https://github.com/analogdevicesinc/nvidia/tree/gmsl/main/README.md
 [bi-3]: https://github.com/analogdevicesinc/linux/tree/gmsl_k26/xilinx_v6.1_LTS/README-GMSL.md
+
+[tool-3]: https://github.com/analogdevicesinc/gmsl/tree/tools/AD-GMSL522-SL
 
 [dlsh-0]: https://img.shields.io/badge/release-RPI_SD_Card_Image-blue.svg
 [dlsh-1]: https://img.shields.io/badge/release-KV260_SD_Card_Image-blue.svg
