@@ -1,0 +1,120 @@
+# Name: btogorea
+# Date: 3/18/2024
+# Version: 6.6.5
+#
+# I2C Address(0x), Register Address(0x), Register Value(0x), Read Modify Write(0x)
+#
+# THIS DATA FILE, AND ALL INFORMATION CONTAINED THEREIN,
+# IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+# PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE DATA FILE,
+# THE INFORMATION CONTAINED THEREIN, OR ITS USE FOR ANY PURPOSE.
+# BEFORE USING THIS DATA FILE IN ANY APPLICATION FOR PRODUCTION OR DEPLOYMENT,
+# THE CUSTOMER IS SOLELY RESPONSIBLE FOR TESTING AND VERIFYING
+# THE CONTENT OF THIS DATA FILE IN CONNECTION WITH THEIR PRODUCTS AND SYSTEM(S).
+# ---------------------------------------------------------------------------------
+#
+#            _____ _____  
+#      /\   |  __ \_   _| 
+#     /  \  | |  | || |   
+#    / /\ \ | |  | || |   
+#   / ____ \| |__| || |_  
+#  /_/    \_\_____/_____| 
+#
+# ---------------------------------------------------------------------------------
+# This script is validated on: 
+# MAX96724(1)
+# Please refer to the Errata sheet for each device.
+# ---------------------------------------------------------------------------------
+#de_invert => Value: 0
+0x4F,0x1050,0x00,0x04
+#hs_invert => Value: 0
+0x4F,0x1050,0x00,0x08
+#vs_invert => Value: 1
+0x4F,0x1050,0x10,0x10
+#vs_delay_h => Value: 0
+0x4E,0x1052,0x00
+#vs_delay_m => Value: 0
+0x4E,0x1053,0x00
+#vs_delay_l => Value: 0
+0x4E,0x1054,0x00
+#vs_high_h => Value: 11000
+0x4E,0x1055,0x00
+#vs_high_m => Value: 11000
+0x4E,0x1056,0x2A
+#vs_high_l => Value: 11000
+0x4E,0x1057,0xF8
+#vs_low_h => Value: 2464000
+0x4E,0x1058,0x25
+#vs_low_m => Value: 2464000
+0x4E,0x1059,0x99
+#vs_low_l => Value: 2464000
+0x4E,0x105A,0x00
+#v2h_h => Value: 0
+0x4E,0x105B,0x00
+#v2h_m => Value: 0
+0x4E,0x105C,0x00
+#v2h_l => Value: 0
+0x4E,0x105D,0x00
+#v_hs_high_h => Value: 44
+0x4E,0x105E,0x00
+#v_hs_high_l => Value: 44
+0x4E,0x105F,0x2C
+#v_hs_low_h => Value: 2156
+0x4E,0x1060,0x08
+#v_hs_low_l => Value: 2156
+0x4E,0x1061,0x6C
+#v_hs_cnt_h => Value: 1125
+0x4E,0x1062,0x04
+#v_hs_cnt_l => Value: 1125
+0x4E,0x1063,0x65
+#v2d_h => Value: 90392
+0x4E,0x1064,0x01
+#v2d_m => Value: 90392
+0x4E,0x1065,0x61
+#v2d_l => Value: 90392
+0x4E,0x1066,0x18
+#v_de_high_h => Value: 1920
+0x4E,0x1067,0x07
+#v_de_high_l => Value: 1920
+0x4E,0x1068,0x80
+#v_de_low_h => Value: 280
+0x4E,0x1069,0x01
+#v_de_low_l => Value: 280
+0x4E,0x106A,0x18
+#v_de_cnt_h => Value: 1080
+0x4E,0x106B,0x04
+#v_de_cnt_l => Value: 1080
+0x4E,0x106C,0x38
+#patgen_mode => Value: 1
+0x4F,0x1051,0x10,0x30
+#chkr_a_l => Value: 0
+0x4E,0x106E,0x00
+#chkr_a_m => Value: 0
+0x4E,0x106F,0x00
+#chkr_a_h => Value: 255
+0x4E,0x1070,0xFF
+#chkr_b_l => Value: 255
+0x4E,0x1071,0xFF
+#chkr_b_m => Value: 255
+0x4E,0x1072,0xFF
+#chkr_b_h => Value: 255
+0x4E,0x1073,0xFF
+#chkr_rpt_a => Value: 96
+0x4E,0x1074,0x60
+#chkr_rpt_b => Value: 96
+0x4E,0x1075,0x60
+#chkr_alt => Value: 54
+0x4E,0x1076,0x36
+#patgen_clk_src => Value: 0
+0x4F,0x1DC,0x00,0x80
+#pclk => Value: 0
+0x4F,0x09,0x00,0x03
+#force_csi_out => Value: 1
+0x4F,0x8A0,0x80,0x80
+#vpg_enable => Value: 227
+0x4F,0x1050,0xE3,0xE3
