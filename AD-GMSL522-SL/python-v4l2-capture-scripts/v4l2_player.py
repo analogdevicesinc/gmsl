@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--device", "-d", dest="device", default='/dev/video2')
     parser.add_argument("--width", "-x", dest="width", default=1920, type=int)
     parser.add_argument("--height", "-y", dest="height", default=1080, type=int)
+    parser.add_argument("--bpp", "-b", dest="bpp", default=4, type=int)
     
     parser.add_argument("--position", "-p", dest="position", default="0,0")
     parser.add_argument("--fullscreen", "-f", dest="fullscreen", default=False, action="store_true")
@@ -26,6 +27,7 @@ def main():
     args = parser.parse_args()
     width = args.width
     height = args.height
+    bpp = args.bpp
     
     vd = os.open(args.device, os.O_RDWR, 0)
 
@@ -49,8 +51,8 @@ def main():
     print("sizeimage:", fmt.fmt.pix.sizeimage)
     fmt.fmt.pix.height = height
     fmt.fmt.pix.width = width
-    fmt.fmt.pix.sizeimage = width * height * 4
-    fmt.fmt.pix.bytesperline = width * 4
+    fmt.fmt.pix.sizeimage = width * height * bpp
+    fmt.fmt.pix.bytesperline = width * bpp
     fcntl.ioctl(vd, VIDIOC_S_FMT, fmt)  # set whatever default settings we got before
 
     fcntl.ioctl(vd, VIDIOC_G_FMT, fmt)  # get current settings
@@ -116,11 +118,24 @@ def main():
             buf = buffers[frame_count % req.count]
             fcntl.ioctl(vd, VIDIOC_DQBUF, buf)  # get image from the driver queue
             mm = buffers[buf.index].buffer
-            frame = np.frombuffer(mm, dtype=np.uint8, count=width*height*4)
-            frame = np.reshape(frame, (height,width,4))
-            frame[:,:,3] = 255
-            #print("frame[0,100,:]:", frame[0,100,:])
-            cv2.imshow('image', frame)
+            frame = np.frombuffer(mm, dtype=np.uint8, count=width*height*bpp)
+            frame = np.reshape(frame, (height,width,bpp))
+
+            if bpp == 1:
+                # Assuming Bayer format
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
+            elif bpp == 2:
+                # Assuming Bayer format with 16-bit depth
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
+            elif bpp == 3:
+                # Assuming BGR format
+                frame_bgr = frame
+            elif bpp == 4:
+                # Assuming BGRA format
+                frame[:,:,3] = 255  # Set alpha channel to fully opaque
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
+            cv2.imshow('image', frame_bgr)
             key = cv2.waitKey(1)
             fcntl.ioctl(vd, VIDIOC_QBUF, buf)  # requeue the buffer
 

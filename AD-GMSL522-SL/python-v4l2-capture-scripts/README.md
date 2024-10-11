@@ -29,6 +29,7 @@ python v4l2_player.py [options]
 - `--device`, `-d`: Specify the video device (default: `/dev/video2`).
 - `--width`, `-x`: Set the width of the video capture (default: `1920`).
 - `--height`, `-y`: Set the height of the video capture (default: `1080`).
+- `--bpp`, `-b`: Set the bytes per pixel of the image (default: `4`).
 - `--position`, `-p`: Set the position of the display window in the format `x,y` (default: `0,0`).
 - `--fullscreen`, `-f`: Enable fullscreen mode (default: `False`).
 - `--capture`, `-c`: Enable frame capture to a PNG file (default: `False`).
@@ -36,7 +37,7 @@ python v4l2_player.py [options]
 ### Example
 
 ```sh
-python v4l2_player.py --device /dev/video0 --width 1280 --height 720 --fullscreen
+python v4l2_player.py --device /dev/video0 --width 1280 --height 720 --bpp 4 --fullscreen
 ```
 
 ## License
