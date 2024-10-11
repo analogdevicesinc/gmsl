@@ -21,11 +21,7 @@
 Run the script with the following command-line arguments:
 
 ```sh
-python 
-
-v4l2_player.py
-
- [options]
+python v4l2_player.py [options]
 ```
 
 ### Options
@@ -40,11 +36,7 @@ v4l2_player.py
 ### Example
 
 ```sh
-python 
-
-v4l2_player.py
-
- --device /dev/video0 --width 1280 --height 720 --fullscreen
+python v4l2_player.py --device /dev/video0 --width 1280 --height 720 --fullscreen
 ```
 
 ## License
