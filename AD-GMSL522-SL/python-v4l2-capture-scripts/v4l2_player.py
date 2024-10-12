@@ -10,7 +10,7 @@ import os
 import cv2
 import numpy as np
 import argparse
-
+import math
 
 def main():
     print("V4L2 PLAYER")
@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--position", "-p", dest="position", default="0,0")
     parser.add_argument("--fullscreen", "-f", dest="fullscreen", default=False, action="store_true")
     parser.add_argument("--capture", "-c", dest="capture", default=False, action="store_true")
+    parser.add_argument("--no_truncate", "-n", dest="truncate", default=True, action="store_false")
+    
     
     args = parser.parse_args()
     width = args.width
@@ -51,8 +53,14 @@ def main():
     print("sizeimage:", fmt.fmt.pix.sizeimage)
     fmt.fmt.pix.height = height
     fmt.fmt.pix.width = width
-    fmt.fmt.pix.sizeimage = width * height * bpp
-    fmt.fmt.pix.bytesperline = width * bpp
+    
+    #Buffer width must be in increments of 16 pixels. Round up width to nearest 16 pixels
+    width_16 = int(math.ceil(width/16)) * 16
+    print("width_16:", width_16)
+
+    fmt.fmt.pix.sizeimage = width_16 * height * bpp
+    fmt.fmt.pix.bytesperline = width_16 * bpp
+    
     fcntl.ioctl(vd, VIDIOC_S_FMT, fmt)  # set whatever default settings we got before
 
     fcntl.ioctl(vd, VIDIOC_G_FMT, fmt)  # get current settings
@@ -118,8 +126,13 @@ def main():
             buf = buffers[frame_count % req.count]
             fcntl.ioctl(vd, VIDIOC_DQBUF, buf)  # get image from the driver queue
             mm = buffers[buf.index].buffer
-            frame = np.frombuffer(mm, dtype=np.uint8, count=width*height*bpp)
-            frame = np.reshape(frame, (height,width,bpp))
+            frame = np.frombuffer(mm, dtype=np.uint8, count=width_16*height*bpp)
+            frame = np.reshape(frame, (height,width_16,bpp))
+            
+            if args.truncate:
+                if width != width_16:
+                    #clip empty pixels off the edge of the frame if the frame buffer and pixture are not the same width
+                    frame = frame[:,0:width,:]
 
             if bpp == 1:
                 # Assuming Bayer format
