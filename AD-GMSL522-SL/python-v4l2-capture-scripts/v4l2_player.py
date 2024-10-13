@@ -25,8 +25,11 @@ def main():
     parser.add_argument("--capture", "-c", dest="capture", default=False, action="store_true")
     parser.add_argument("--no_truncate", "-n", dest="truncate", default=True, action="store_false")
     
-    
     args = parser.parse_args()
+    
+    if args.capture:
+        print("CAPTURE ENABLED: Perforamnce may be reduced")
+    
     width = args.width
     height = args.height
     bpp = args.bpp
@@ -129,9 +132,9 @@ def main():
             frame = np.frombuffer(mm, dtype=np.uint8, count=width_16*height*bpp)
             frame = np.reshape(frame, (height,width_16,bpp))
             
+            #Option to clip empty pixels off the edge of the frame if the frame buffer and pixture are not the same width
             if args.truncate:
                 if width != width_16:
-                    #clip empty pixels off the edge of the frame if the frame buffer and pixture are not the same width
                     frame = frame[:,0:width,:]
 
             if bpp == 1:
@@ -150,14 +153,15 @@ def main():
 
             cv2.imshow('image', frame_bgr)
             key = cv2.waitKey(1)
+            if args.capture:
+                if key == ord("c"):
+                    filename = "capture_%sx%s.png" % (width, height)
+                    cv2.imwrite(filename, frame)
+                    print("Capture frame to %s" % filename)
             fcntl.ioctl(vd, VIDIOC_QBUF, buf)  # requeue the buffer
 
             if(frame_count % 100 == 0):
                 print("Frame count:", frame_count)
-                if args.capture:
-                    filename = "capture_%sx%s.png" % (width, height)
-                    cv2.imwrite(filename, frame)
-                    print("Capture frame to %s" % filename)
 
             frame_count += 1
     except KeyboardInterrupt:
