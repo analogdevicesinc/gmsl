@@ -1,0 +1,5 @@
+*.sal
+*.csv
+/output
+*.pyc
+*.pyo
