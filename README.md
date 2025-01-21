@@ -56,13 +56,13 @@ More details on how to extract a compressed image and write it on the SD card on
 [dlsh-2]: https://img.shields.io/badge/release-Nvidia_Orin_Nano_SD_Card_Image-blue.svg
 
 [dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-gdf25c15ded99.tar.xz
-[dl-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kria-2eb64424cc31.tar.xz
+[dl-1]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260.tar.xz
 [dl-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano.img.tar.xz
 [dl-4]: https://swdownloads.analog.com/cse/gmsl/10G/gmsl-10g-fsync.tar.xz
 
 [shash-0]: https://img.shields.io/badge/sha256sum-yellow.svg
 
 [sha-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-gdf25c15ded99-sha256sum.txt
-[sha-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kria-2eb64424cc31-sha256sum.txt
+[sha-1]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260-sha256sum.txt
 [sha-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano-sha256sum.txt
 [sha-4]: https://swdownloads.analog.com/cse/gmsl/10G/gmsl-10g-fsync-sha256sum.txt
