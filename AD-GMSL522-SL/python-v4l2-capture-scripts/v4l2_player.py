@@ -22,6 +22,7 @@ def main():
     
     parser.add_argument("--position", "-p", dest="position", default="0,0")
     parser.add_argument("--fullscreen", "-f", dest="fullscreen", default=False, action="store_true")
+    parser.add_argument("--raw", "-r", dest="raw", default=False, action="store_true", help='Set it for BAYER sensors. Will apply debayering')
     parser.add_argument("--capture", "-c", dest="capture", default=False, action="store_true")
     
     args = parser.parse_args()
@@ -125,8 +126,10 @@ def main():
                 # Assuming Bayer format
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
             elif bpp == 2:
-                # Assuming Bayer format with 16-bit depth
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
+                if args.raw:
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
+                else:
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_YUY2)
             elif bpp == 3:
                 # Assuming BGR format
                 frame_bgr = frame
