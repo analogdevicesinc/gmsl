@@ -41,7 +41,9 @@ struct PayloadHeader {
 struct Packet {
     std::vector<uint8_t> data;
     size_t length;
-    unsigned int seq;
+    unsigned int timestamp : 32;
+    unsigned int ssrc : 32;
+    unsigned int csrclist : 32;
     unsigned int marker;
 };
 
@@ -78,7 +80,7 @@ public:
             if (length > 0) {
                 RTPHeader rtp_header = parse_rtp_header(recv_buffer.data(), length);
                 std::lock_guard<std::mutex> lock(buffer_mutex_);
-                packet_buffer_.push({std::vector<uint8_t>(recv_buffer.begin(), recv_buffer.begin() + length), length, rtp_header.seq, rtp_header.marker});
+                packet_buffer_.push({std::vector<uint8_t>(recv_buffer.begin(), recv_buffer.begin() + length), length, rtp_header.timestamp, rtp_header.ssrc, rtp_header.csrclist, rtp_header.marker});
                 cond_var_.notify_one();
             }
         }
@@ -145,7 +147,19 @@ private:
                     yuv_image = cv::Mat(this->height, this->width, CV_8UC2, frame_data.data());
                     cv::cvtColor(yuv_image, bgr_image, cv::COLOR_YUV2BGR_UYVY);
                     img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr_image).toImageMsg();
+
+                    // Parse custom timestamp
+                    uint64_t sec = (static_cast<uint64_t>(packet.timestamp) << 16) | (packet.ssrc >> 16);
+                    uint32_t nsec = ((packet.ssrc & 0x0000FFFF) << 16) | ((packet.csrclist & 0xFFFF0000) >> 16);
+                    uint16_t fraction_nsec = (packet.csrclist & 0x0000FFFF) ;
+                    img_msg->header.stamp.sec = sec;
+                    img_msg->header.stamp.nanosec = nsec;
+
+                    // Publish image topic
                     image_pub_->publish(*img_msg);
+
+                    // Print the trigger time format: (seconds).(nano seconds).(fraction nano seconds)
+                    RCLCPP_INFO(this->get_logger(), "Publish Image...TriggerTime: %010lu.%010u.%05u", sec, nsec, fraction_nsec);
                 }
             }
         }
