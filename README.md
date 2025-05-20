@@ -38,11 +38,11 @@ More details on how to extract a compressed image and write it on the SD card on
 [pl-3]: https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/ad-gmsl522-sl.html#eb-overview
 [pl-4]: https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/ad-gmsl2eth-sl.html
 
-[ug-0]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_rpi
-[ug-1]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_amd_kria
-[ug-2]: https://wiki.analog.com/resources/eval/user-guides/ad-gmslcamrpi-adp/ug_nvidia_jetson_orin_nano
-[ug-3]: https://wiki.analog.com/resources/eval/user-guides/ad-gmsl522-sl
-[ug-4]: https://wiki.analog.com/resources/eval/user-guides/ad-gmsl2eth-sl
+[ug-0]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmslcamrpi-adp/raspberry-pi-user-guide/index.html
+[ug-1]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmslcamrpi-adp/amd-kria/index.html
+[ug-2]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmslcamrpi-adp/nvidia-jetson/index.html
+[ug-3]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmsl522-sl/index.html
+[ug-4]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmsl2eth-sl/index.html
 
 [bi-0]: https://github.com/analogdevicesinc/linux/blob/gmsl/rpi-6.1.y/README-GMSL.md
 [bi-1]: https://github.com/analogdevicesinc/linux/blob/gmsl/xilinx_v6.1_LTS/README-GMSL.md
