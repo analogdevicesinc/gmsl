@@ -25,3 +25,11 @@ gmsl-uart-server [options]
   Use verbose mode to print all the interpreted commands received from the GUI
   
   Use debug mode to print all transfers payload
+  
+Change Log:
+
+- 1.0.1:
+    - First release version
+- 1.0.2:
+    - Add EYE Diagram support
+
