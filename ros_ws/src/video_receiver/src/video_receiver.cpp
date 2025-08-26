@@ -56,6 +56,7 @@ public:
       width(this->declare_parameter<int>("width", 1920)),
       height(this->declare_parameter<int>("height", 1280)),
       topic(this->declare_parameter<std::string>("topic", "cam0")),
+      frame_id(this->declare_parameter<std::string>("frame_id", "cam0")),
       timestamp_config(this->declare_parameter<int>("timestamp_config", 0)),
       socket_(io_service_, udp::endpoint(boost::asio::ip::address::from_string(ip), port)),
       image_pub_(this->create_publisher<sensor_msgs::msg::Image>(topic, 100)),
@@ -92,6 +93,7 @@ private:
     int width;
     int height;
     std::string topic;
+    std::string frame_id;
     int timestamp_config; // 0 - default, 1 - custom (header: timestamp + ssrc + csrclist)
     boost::asio::io_service io_service_;
     udp::socket socket_;
@@ -147,6 +149,7 @@ private:
                     yuv_image = cv::Mat(this->height, this->width, CV_8UC2, frame_data.data());
                     cv::cvtColor(yuv_image, bgr_image, cv::COLOR_YUV2BGR_UYVY);
                     img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr_image).toImageMsg();
+                    img_msg->header.frame_id = this->frame_id;
 
                     // Parse custom timestamp
                     uint64_t sec = (static_cast<uint64_t>(packet.timestamp) << 16) | (packet.ssrc >> 16);
@@ -229,7 +232,7 @@ private:
 
         return {extended_sequence_number, headers};
     }
-    
+
    void print_header(const RTPHeader& header) {
         RCLCPP_INFO(this->get_logger(), "RTP Header: V=%u, P=%d, X=%d, CC=%u, M=%d, PT=%u, Seq=%u, TS=%u, SSRC=%u, CSRCL=%u",
                     header.version, header.padding, header.extension, header.csrc_count, header.marker, header.payload_type, header.seq, header.timestamp, header.ssrc, header.csrclist);
