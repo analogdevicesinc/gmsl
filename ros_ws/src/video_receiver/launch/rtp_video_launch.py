@@ -13,6 +13,7 @@ def generate_launch_description():
             {'ip': '10.42.0.1'},
             {'port': 5004 + i},
             {'topic': f'cam{i}'},
+            {'frame_id': f'cam{i}'},
             {'width': 1920},
             {'height': 1280},
             {'timestamp_config': 1}
@@ -29,4 +30,3 @@ def generate_launch_description():
     )
 
     return LaunchDescription(nodes)
-    
