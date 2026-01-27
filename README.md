@@ -55,7 +55,7 @@ More details on how to extract a compressed image and write it on the SD card on
 [dlsh-1]: https://img.shields.io/badge/release-KV260_SD_Card_Image-blue.svg
 [dlsh-2]: https://img.shields.io/badge/release-Nvidia_Orin_Nano_SD_Card_Image-blue.svg
 
-[dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-gdf25c15ded99.tar.xz
+[dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-b602dbfcc627dcf3.tar.xz
 [dl-1]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260.tar.xz
 [dl-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano.img.tar.xz
 [dl-4]: https://swdownloads.analog.com/cse/gmsl/10G/gmsl-10g-fsync.tar.xz
