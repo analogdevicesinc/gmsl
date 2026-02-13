@@ -24,11 +24,11 @@ More details on how to extract a compressed image and write it on the SD card on
 
 | Platform                               | Collateral                                                         | Downloads                   |
 | -------------------------------------- | ------------------------------------------------------------------ | --------------------------- |
-| [Raspberry Pi 4 or 5][pl-0]            | [User Guide][ug-0] <br> [Source code][bi-0]                        | [![Download][dlsh-0]][dl-0] <br> [![sha256sum][shash-0]][sha-0] |
-| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Source code][bi-1]                        | [![Download][dlsh-1]][dl-1] <br> [![sha256sum][shash-0]][sha-1] |
-| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Source code][bi-2]                        | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] |
+| [Raspberry Pi 4 or 5][pl-0]            | [User Guide][ug-0] <br> [Source code][bi-0]                        | [![Download][dlsh-0]][dl-0] <br> [![sha256sum][shash-0]][sha-0] <br> [![Download][dlsh-1]][dl-1] <br> [![sha256sum][shash-0]][sha-1] |
+| [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Source code][bi-1]                        | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] |
+| [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Source code][bi-2]                        | [![Download][dlsh-3]][dl-3] <br> [![sha256sum][shash-0]][sha-3] |
 | [AD-GMSL522-SL][pl-3]                  | [User Guide][ug-3] <br> [Source code][bi-2] <br> [Tools][tool-3]   | <br> |
-| [AD-GMSL2ETH-SL][pl-4]                 | [User Guide][ug-4] <br> [Source code][bi-3]                        | [![Download][dlsh-2]][dl-4] <br> [![sha256sum][shash-0]][sha-4] |
+| [AD-GMSL2ETH-SL][pl-4]                 | [User Guide][ug-4] <br> [Source code][bi-3]                        | [![Download][dlsh-4]][dl-4] <br> [![sha256sum][shash-0]][sha-4] |
 
 [sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
 
@@ -51,18 +51,22 @@ More details on how to extract a compressed image and write it on the SD card on
 
 [tool-3]: https://github.com/analogdevicesinc/gmsl/tree/tools/AD-GMSL522-SL
 
-[dlsh-0]: https://img.shields.io/badge/release-RPI_SD_Card_Image-blue.svg
-[dlsh-1]: https://img.shields.io/badge/release-KV260_SD_Card_Image-blue.svg
-[dlsh-2]: https://img.shields.io/badge/release-Nvidia_Orin_Nano_SD_Card_Image-blue.svg
+[dlsh-0]: https://img.shields.io/badge/latest_release-RPI_SD_Card_Image-blue.svg
+[dlsh-1]: https://img.shields.io/badge/old_release-RPI_SD_Card_Image-blue.svg
+[dlsh-2]: https://img.shields.io/badge/release-KV260_SD_Card_Image-blue.svg
+[dlsh-3]: https://img.shields.io/badge/release-Nvidia_Orin_Nano_SD_Card_Image-blue.svg
+[dlsh-4]: https://img.shields.io/badge/release-AD--GMSL2ETH--SL_SD_Card_Image-blue.svg
 
 [dl-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-b602dbfcc627dcf3.tar.xz
-[dl-1]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260.tar.xz
-[dl-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano.img.tar.xz
+[dl-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-gdf25c15ded99.tar.xz
+[dl-2]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260.tar.xz
+[dl-3]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano.img.tar.xz
 [dl-4]: https://swdownloads.analog.com/cse/gmsl/10G/gmsl-10g-fsync.tar.xz
 
 [shash-0]: https://img.shields.io/badge/sha256sum-yellow.svg
 
-[sha-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-gdf25c15ded99-sha256sum.txt
-[sha-1]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260-sha256sum.txt
-[sha-2]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano-sha256sum.txt
+[sha-0]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-b602dbfcc627dcf3-sha256sum.txt
+[sha-1]: https://swdownloads.analog.com/cse/gmsl/gmsl-kuiper-rpi-gdf25c15ded99-sha256sum.txt
+[sha-2]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260-sha256sum.txt
+[sha-3]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano-sha256sum.txt
 [sha-4]: https://swdownloads.analog.com/cse/gmsl/10G/gmsl-10g-fsync-sha256sum.txt
