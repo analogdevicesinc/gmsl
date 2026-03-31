@@ -2,3 +2,4 @@
 
 ## Platforms
 - AD-GMSL522-SL
+- RPI
