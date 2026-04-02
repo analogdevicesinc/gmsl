@@ -70,3 +70,11 @@ More details on how to extract a compressed image and write it on the SD card on
 [sha-2]: https://swdownloads.analog.com/cse/gmsl/Kria/gmsl-kv260-sha256sum.txt
 [sha-3]: https://swdownloads.analog.com/cse/aditof/gmsl-nvidia-orin-nano-sha256sum.txt
 [sha-4]: https://swdownloads.analog.com/cse/gmsl/10G/gmsl-10g-fsync-sha256sum.txt
+
+## Claude Code Support
+
+For a quick-start setup, use [Claude Code][ref-2] with one of the skills found
+in [Claude Code Skills][ref-1] to automate GMSL camera configuration and deployment.
+
+[ref-1]: https://github.com/analogdevicesinc/gmsl/blob/tools/claude-code
+[ref-2]: https://claude.com/product/claude-code
