@@ -105,7 +105,9 @@ ssh ... -- "echo '<pw>' | sudo -S sed -i '/^dtoverlay=gmsl/d' <config_path>"
 ssh ... -- "echo '<pw>' | sudo -S sh -c 'echo dtoverlay=gmsl >> <config_path>'"
 ```
 
-#### 4h. Reboot and wait
+#### 4h. Reboot the target board and wait
+The target board must be rebooted after the overlay is installed and boot config is updated,
+so the new device tree overlay is loaded on boot.
 ```bash
 ssh ... -- "echo '<pw>' | sudo -S reboot"
 ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip>
@@ -113,6 +115,7 @@ ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip>
 Then sleep 30, poll with `sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 <user>@<ip> echo ok` every 5s until success (max 40 attempts). After online, sleep 5 more, then re-establish the control socket (step 4e).
 
 #### 4i. Run video_cfg.sh
+The `video_cfg.sh` script is located at `/home/<user>/Workspace/video_cfg.sh` on the target board.
 Update variables and run:
 ```bash
 ssh ... -- "sed -i 's/^CAM_LIST=.*/CAM_LIST=\"<cam_list>\"/' /home/<user>/Workspace/video_cfg.sh"
@@ -122,7 +125,8 @@ ssh ... -- "cd /home/<user>/Workspace && ./video_cfg.sh"
 Where cam_list is e.g. "cam0" or "cam0,cam1,cam2,cam3" and model is the sensor name.
 If cameras use different sensor models, repeat sed+run for each model group (update CAM_LIST to only the cams with that model, update CAM_MODEL, run).
 
-#### 4j. Launch video viewer
+#### 4j. Launch video viewer on the target board
+The GUI must launch qv4l2 on the target board (not locally). This is done via SSH:
 ```bash
 ssh ... -- "DISPLAY=:0 XAUTHORITY=/home/<user>/.Xauthority nohup qv4l2 > /dev/null 2>&1 &"
 ```
