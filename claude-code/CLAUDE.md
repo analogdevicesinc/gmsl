@@ -4,7 +4,7 @@
 
 TRIGGER when: user mentions GMSL camera setup, camera configuration for Raspberry Pi,
 deploying camera overlay to RPi, video feed from GMSL camera, configuring deserializer/serializer
-on Raspberry Pi, or asks about MAX96724/MAX96716/MAX9296A/MAX96712/MAX96792A camera setup.
+on Raspberry Pi, or asks about MAX96724/MAX96716A/MAX9296A/MAX96712/MAX96792A camera setup.
 
 When this skill is triggered, use AskUserQuestion to prompt the user interactively.
 If the user asks for the GUI instead, generate the full GUI application as a Python tkinter
@@ -14,7 +14,7 @@ Do NOT reference or launch `~/gmsl_setup.py` — always generate the code fresh.
 
 ### Step 1: Prompt for hardware choices (single AskUserQuestion, 3 questions)
 - **RPi Model** (header: "RPi Model"): Raspberry Pi 5 (4 MIPI lanes) | Raspberry Pi 4 (2 MIPI lanes)
-- **Deserializer** (header: "Deserializer"): MAX96724 (4-link) | MAX9296A (2-link) | MAX96716 (2-link) | MAX96712 (4-link). Also available but less common: MAX96724F (1-link), MAX96792A (1-link GMSL3) — put these in "Other".
+- **Deserializer** (header: "Deserializer"): MAX96724 (4-link) | MAX9296A (2-link) | MAX96716A (2-link) | MAX96712 (4-link). Also available but less common: MAX96724F (1-link), MAX96792A (1-link GMSL3) — put these in "Other".
 - **Camera count** (header: "Cam Count"): 1 / 2 / 3 / 4 (max depends on deserializer)
 
 ### Step 2: Prompt for per-camera and port config (single AskUserQuestion, 2–3 questions)
