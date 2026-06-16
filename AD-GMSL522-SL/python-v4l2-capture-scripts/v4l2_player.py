@@ -19,17 +19,21 @@ def main():
     parser.add_argument("--width", "-x", dest="width", default=1920, type=int)
     parser.add_argument("--height", "-y", dest="height", default=1080, type=int)
     parser.add_argument("--bpp", "-b", dest="bpp", default=4, type=int)
-    
     parser.add_argument("--position", "-p", dest="position", default="0,0")
     parser.add_argument("--fullscreen", "-f", dest="fullscreen", default=False, action="store_true")
     parser.add_argument("--raw", "-r", dest="raw", default=False, action="store_true", help='Set it for BAYER sensors. Will apply debayering')
     parser.add_argument("--capture", "-c", dest="capture", default=False, action="store_true")
-    
+    parser.add_argument("--tegra", "-t", dest="tegra", default=None, action="store_true", help='Force Tegra mode (RAW10/RAW12/RAW14 left-aligned Bayer in 16-bit). Auto-detected if omitted.')
+
     args = parser.parse_args()
     width = args.width
     height = args.height
     bpp = args.bpp
-    
+
+    # auto-detect Tegra if not explicitly set
+    if args.tegra is None:
+        args.tegra = os.path.exists("/sys/bus/platform/drivers/tegra-camrtc-capture-vi")
+
     vd = os.open(args.device, os.O_RDWR, 0)
 
     print(">> get device capabilities")
@@ -61,12 +65,15 @@ def main():
     print("new sizeimage:", fmt.fmt.pix.sizeimage)
     print("new bytesperline:", fmt.fmt.pix.bytesperline)
 
+    if args.tegra:
+        print(">> Tegra mode enabled (RAW10/RAW12/RAW14 left-aligned Bayer in 16-bit)")
+
     print(">> init mmap capture")
     req = v4l2_requestbuffers()
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE
     req.memory = V4L2_MEMORY_MMAP
     req.count = 1  # nr of buffer frames
-    fcntl.ioctl(vd, VIDIOC_REQBUFS, req)  # tell the driver that we want some buffers 
+    fcntl.ioctl(vd, VIDIOC_REQBUFS, req)  # tell the driver that we want some buffers
     print("req.count", req.count)
 
     buffers = []
@@ -100,13 +107,13 @@ def main():
         ready_to_read, ready_to_write, in_error = select.select([vd], [], [], max_t)
 
     print(">>> download buffers")
-    
+
     if args.fullscreen:
         cv2.namedWindow('image', cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty('image',cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
     else:
         cv2.namedWindow('image')
-    
+
     pos = args.position.split(",")
     xpos = int(pos[0])
     ypos = int(pos[1])
@@ -119,15 +126,25 @@ def main():
             buf = buffers[frame_count % req.count]
             fcntl.ioctl(vd, VIDIOC_DQBUF, buf)  # get image from the driver queue
             mm = buffers[buf.index].buffer
-            frame = np.frombuffer(mm, dtype=np.uint8, count=width*height*bpp)
-            frame = np.reshape(frame, (height,width,bpp))
+            if bpp == 2 and args.raw and args.tegra:
+                # Tegra: RAW10/12/14 Bayer left-aligned in 16-bit words, read as uint16
+                frame = np.frombuffer(mm, dtype=np.uint16, count=width*height)
+                frame = np.reshape(frame, (height, width))
+            else:
+                frame = np.frombuffer(mm, dtype=np.uint8, count=width*height*bpp)
+                frame = np.reshape(frame, (height,width,bpp))
 
             if bpp == 1:
                 # Assuming Bayer format
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
             elif bpp == 2:
                 if args.raw:
-                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
+                    if args.tegra:
+                        # RAW10/RAW12/RAW14: extract top 8 bits from left-aligned data, then debayer
+                        frame_8bit = (frame >> 8).astype(np.uint8)
+                        frame_bgr = cv2.cvtColor(frame_8bit, cv2.COLOR_BAYER_BG2BGR)
+                    else:
+                        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
                 else:
                     frame_bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_YUY2)
             elif bpp == 3:
@@ -157,7 +174,7 @@ def main():
     fcntl.ioctl(vd, VIDIOC_STREAMOFF, buf_type)
     os.close(vd)
     # vd.close()
-    
-    
+
+
 if __name__ == "__main__":
     main()
