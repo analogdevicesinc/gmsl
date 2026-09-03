@@ -28,7 +28,7 @@ More details on how to extract a compressed image and write it on the SD card on
 | [AMD KV260][pl-1]                      | [User Guide][ug-1] <br> [Source code][bi-1]                        | [![Download][dlsh-2]][dl-2] <br> [![sha256sum][shash-0]][sha-2] <br> [![Download][dlsh-3]][dl-3] <br> [![sha256sum][shash-0]][sha-3] |
 | [Nvidia Orin Nano Developer Kit][pl-2] | [User Guide][ug-2] <br> [Source code][bi-2]                        | [![Download][dlsh-4]][dl-4] <br> [![sha256sum][shash-0]][sha-4] |
 | [AD-GMSL522-SL][pl-3]                  | [User Guide][ug-3] <br> [Source code][bi-2] <br> [Tools][tool-3]   | <br> |
-| [AD-GMSL2ETH-SL][pl-4]                 | [User Guide][ug-4] <br> [Source code][bi-3]                        | [![Download][dlsh-5]][dl-5] <br> [![sha256sum][shash-0]][sha-5] |
+| [ADRD8012-01Z][pl-4]                 | [User Guide][ug-4] <br> [Source code][bi-3]                        | [![Download][dlsh-5]][dl-5] <br> [![sha256sum][shash-0]][sha-5] |
 
 [sdcard-burn]: http://github.com/analogdevicesinc/aditof_sdk/blob/master/doc/sdcard_burn.md
 
@@ -38,11 +38,11 @@ More details on how to extract a compressed image and write it on the SD card on
 [pl-3]: https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/ad-gmsl522-sl.html#eb-overview
 [pl-4]: https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/ad-gmsl2eth-sl.html
 
-[ug-0]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmslcamrpi-adp/raspberry-pi-user-guide/index.html
-[ug-1]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmslcamrpi-adp/amd-kria/index.html
-[ug-2]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmslcamrpi-adp/nvidia-jetson/index.html
-[ug-3]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmsl522-sl/index.html
-[ug-4]: https://analogdevicesinc.github.io/documentation/solutions/reference-designs/ad-gmsl2eth-sl/index.html
+[ug-0]: https://analogdevicesinc.github.io/system-level/solutions/reference-designs/ad-gmslcamrpi-adp/raspberry-pi-user-guide/index.html
+[ug-1]: https://analogdevicesinc.github.io/system-level/solutions/reference-designs/ad-gmslcamrpi-adp/amd-kria/index.html
+[ug-2]: https://analogdevicesinc.github.io/system-level/solutions/reference-designs/ad-gmslcamrpi-adp/nvidia-jetson/index.html
+[ug-3]: https://analogdevicesinc.github.io/system-level/solutions/reference-designs/ad-gmsl522-sl/index.html
+[ug-4]: https://analogdevicesinc.github.io/system-level/solutions/reference-designs/adrd8012-01Z/index.html
 
 [bi-0]: https://github.com/analogdevicesinc/linux/blob/gmsl/rpi-6.13.y/README-GMSL.md
 [bi-1]: https://github.com/analogdevicesinc/linux/blob/gmsl/xilinx_v6.1_LTS/README-GMSL.md
