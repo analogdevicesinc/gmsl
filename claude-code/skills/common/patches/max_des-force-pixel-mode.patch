@@ -1,0 +1,30 @@
+diff --git a/max_des.c b/max_des.c
+index 1231529..cc31449 100644
+--- a/max_des.c
++++ b/max_des.c
+@@ -497,6 +497,15 @@ static int max_des_populate_remap_usage(struct max_des_priv *priv,
+ 	return 0;
+ }
+ 
++/*
++ * Local addition (not in ADI's driver): GMSL pixel mode instead of the tunnel mode
++ * the driver picks by itself. Needed on the i.MX93, whose CSI-2 receiver gets no
++ * usable line timing in tunnel mode (only the first line of each frame is stored).
++ */
++static bool force_pixel_mode;
++module_param(force_pixel_mode, bool, 0444);
++MODULE_PARM_DESC(force_pixel_mode, "Use GMSL pixel mode instead of tunnel mode (local addition)");
++
+ static int max_des_get_supported_modes(struct max_des_priv *priv,
+ 				       struct max_des_remap_context *context,
+ 				       unsigned int *modes)
+@@ -507,6 +516,9 @@ static int max_des_get_supported_modes(struct max_des_priv *priv,
+ 
+ 	*modes = des->ops->modes;
+ 
++	if (force_pixel_mode)
++		*modes &= BIT(MAX_SERDES_GMSL_PIXEL_MODE);
++
+ 	if (context->tpg)
+ 		*modes = BIT(des->ops->tpg_mode);
+ 

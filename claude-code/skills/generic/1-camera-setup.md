@@ -94,8 +94,8 @@ config (Recommended)** | **Artifacts only**. Record `dt_installed` and the metho
 1. **Runtime overlay (no reboot)**, if the assessment found `of_overlay_fdt_apply` and
    `dt-overlays-dir=yes`:
    ```bash
-   scp -o ControlPath=/tmp/gmsl_ssh_sock /tmp/gen_gmsl_dts/gmsl.dtbo <user>@<ip>:/tmp/gmsl.dtbo
-   ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S sh -c 'mkdir /sys/kernel/config/device-tree/overlays/gmsl && cat /tmp/gmsl.dtbo > /sys/kernel/config/device-tree/overlays/gmsl/dtbo && cat /sys/kernel/config/device-tree/overlays/gmsl/status'; rm -f /tmp/gmsl.dtbo"
+   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gen_gmsl_dts/gmsl.dtbo <user>@<ip>:/tmp/gmsl.dtbo
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'mkdir /sys/kernel/config/device-tree/overlays/gmsl && cat /tmp/gmsl.dtbo > /sys/kernel/config/device-tree/overlays/gmsl/dtbo && cat /sys/kernel/config/device-tree/overlays/gmsl/status'; rm -f /tmp/gmsl.dtbo"
    ```
    The status must be `applied`. Load the drivers (`sudo modprobe max9296a` or `max96724`,
    `max96717`, the sensor), then **skip the reboot of common/5** (run only its §Probe check and
@@ -140,7 +140,7 @@ Needed on the board: `media-ctl` with routing support (`media-ctl --help` lists 
 v4l-utils 1.28+), `v4l2-ctl`, `i2cdetect` (`i2c-tools`), `fdtoverlay` for merging on the board, and
 for the viewer GStreamer with `bayer2rgb` (common/8 §GStreamer installs it). Check:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "media-ctl --help 2>&1 | grep -q -- '--set-routes' && echo routes-ok || echo routes-missing; which v4l2-ctl i2cdetect fdtoverlay; which apt-get dnf opkg 2>/dev/null"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "media-ctl --help 2>&1 | grep -q -- '--set-routes' && echo routes-ok || echo routes-missing; which v4l2-ctl i2cdetect fdtoverlay; which apt-get dnf opkg 2>/dev/null"
 ```
 Install missing ones with the board's package manager (apt `v4l-utils i2c-tools
 device-tree-compiler`, dnf, opkg) after asking the user (header: "Install"). Installing needs
@@ -152,8 +152,8 @@ source on the board (several minutes; Internet access needed on the board; needs
 (Recommended)** | **Stop**. To build (run it in the background, since it can take longer than the
 command timeout, and check the result before continuing):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S apt-get update && echo '<pw>' | sudo -S apt-get install -y git build-essential meson ninja-build pkg-config libudev-dev libjpeg-dev"
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "mkdir -p ~/Workspace && cd ~/Workspace && (test -d v4l-utils || git clone https://git.linuxtv.org/v4l-utils.git) && cd v4l-utils && git checkout v4l-utils-1.28.1 && (test -d build || meson setup build) && ninja -C build && echo '<pw>' | sudo -S ninja -C build install"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y git build-essential meson ninja-build pkg-config libudev-dev libjpeg-dev"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p ~/Workspace && cd ~/Workspace && (test -d v4l-utils || git clone https://git.linuxtv.org/v4l-utils.git) && cd v4l-utils && git checkout v4l-utils-1.28.1 && (test -d build || meson setup build) && ninja -C build && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A ninja -C build install"
 ```
 (The Qt development packages are not installed: the Qt tools such as qv4l2 are not needed, and
 meson skips them without Qt. With dnf/opkg, install the same build dependencies under the

@@ -89,8 +89,8 @@ It must print nothing. Otherwise tell the user what is missing and what it is us
   the live-board path), then (Debian/Ubuntu package names: `openssh-client`, `sshpass`,
   `device-tree-compiler`, `python3`, `python3-jinja2`, `curl`, `git`):
   ```bash
-  echo '<pw>' | sudo -S apt-get update
-  echo '<pw>' | sudo -S apt-get install -y <packages>
+  SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update
+  SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y <packages>
   ```
   (passwordless: `sudo apt-get ...`; without `apt-get`: ask the user to install them with the
   distribution's package manager, as in §Host tools). Run the check again: it must print nothing.
@@ -178,8 +178,8 @@ echo "$MISSING"
 
 If `$MISSING` is non-empty, install (with an empty password, `sudo apt-get ...` instead):
 ```bash
-echo '<pw>' | sudo -S apt-get update
-echo '<pw>' | sudo -S apt-get install -y $MISSING
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y $MISSING
 ```
 
 If `apt-get` is not available (a native Linux distribution that is not based on Debian or
@@ -220,36 +220,42 @@ created the folder, `work_dir_created` stays `True`.)
 
 Build/flash paths and Build mode only (see the table at the top), plus §Quick tool check when the
 user chooses to install missing tools. Ask once per run, the first time a step needs it; later
-steps read it from the state.
+steps use the password file.
+
+**Permission mode:** the sudo commands of this skill (`SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A ...`) can be refused in
+Claude Code's auto mode. Before asking, tell the user that the steps from here on need manual
+mode (the default permission mode, where they approve each command; Shift+Tab switches) or a
+permission rule for these commands. If a sudo command is refused later, stop, tell the user
+which command and that it needs manual mode, and continue only after they switched; never
+rewrite the command to get around the refusal.
 
 Use AskUserQuestion with 1 question:
 - **Sudo Password** (header: "Sudo Password"): say in the question that it is the password of
-  the user on this PC (WSL or Linux), not the board's, that it is kept only in the state file
-  `/tmp/gmsl_camera_state.json` (readable only by the current user) and deleted by the cleanup.
+  the user on this PC (WSL or Linux), not the board's, that it is kept only in the file
+  `/tmp/gmsl_pw_sudo` (readable only by the current user), never written into a command, and
+  deleted by the cleanup; and that anything typed in the chat stays in Claude Code's session
+  history (`~/.claude/projects/`).
   - Option 1: "Passwordless sudo configured" (description: "sudo works without a password on this system")
   - Option 2: Other (user types their password)
 
-If passwordless: store an empty string. Otherwise store the password. Check it once with
-`echo '<pw>' | sudo -S -p '' true` (passwordless: `sudo -n true`); if it fails, tell the user and
-ask again.
-
-Update state:
+Write the typed password to the file **once** (the only command that contains it):
+`(umask 077; printf '%s\n' '<typed password>' > /tmp/gmsl_pw_sudo)`. Never put the password, or
+any part of it, into another command or message. If passwordless, create an empty file the same
+way. Then create the helper that `sudo -A` uses and check it:
 ```bash
-python3 -c "
-import json
-state = json.load(open('/tmp/gmsl_camera_state.json'))
-state['sudo_password'] = '<password_or_empty>'
-json.dump(state, open('/tmp/gmsl_camera_state.json', 'w'), indent=2)
-"
+(umask 077; printf '#!/bin/sh\ncat /tmp/gmsl_pw_sudo\n' > /tmp/gmsl_askpass) && chmod 700 /tmp/gmsl_askpass
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A true && echo "sudo OK"
 ```
+If the check fails, tell the user (wrong password, or the file is missing) and ask again. Store
+`sudo_pw_file` = `/tmp/gmsl_pw_sudo` (or `passwordless`) in the state; the state holds no
+password.
 
-For all subsequent local sudo commands in this and all other files, use:
-- If the password is empty: `sudo <cmd>`
-- If the password is set: `echo '<pw>' | sudo -S sh -c '<cmd>'`
-
-Pipe the password into every sudo command, also after long commands such as `dd` or a kernel
-build: the cached sudo credentials can expire meanwhile, and a plain `sudo` then fails with
-"a terminal is required".
+For all subsequent local sudo commands in this and all other files, use
+`SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A <cmd>` (or `... sudo -A sh -c '<cmd>'` for a command
+line). Use it for every sudo command, also after long commands such as `dd` or a kernel build:
+the cached sudo credentials can expire meanwhile, and a plain `sudo` then fails with "a terminal
+is required". Keep `/tmp/gmsl_pw_sudo` and `/tmp/gmsl_askpass` until the end of the run
+(§Cleanup deletes them, after the verbose §Package); do not delete the password mid-run.
 
 ## usbipd
 
@@ -279,10 +285,11 @@ to retry or skip SD card detection.
 
 ### Check for wsl --mount support
 ```bash
-wsl.exe --mount --help 2>&1 | head -1
+wsl.exe --mount 2>&1 | iconv -f utf-16le -t utf-8 | tr -d '\r' | grep -q 'Invalid command line argument: --mount' && echo "wsl --mount: not supported" || echo "wsl --mount: supported"
 ```
-If the command exists, built-in SD card slots are supported. If not, only USB readers
-will work — inform the user.
+(`wsl.exe` prints UTF-16; `--mount` without arguments prints the usage text when it exists, and
+`Invalid command line argument: --mount` when it does not.) If it is supported, built-in SD card
+slots can be used. If not, only USB readers will work — inform the user.
 
 ### Running Windows commands as administrator
 

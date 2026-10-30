@@ -26,6 +26,11 @@ FRDM-IMX95-PRO, NXP i.MX Linux 6.18.20-2.0.0 (tested on eMMC boot):
 | `bootdelay` | 2 s (hold Enter on the serial console while the board resets to reach `=>`) |
 | Base / GMSL DTB | `imx95-19x19-frdm-pro.dtb` / `imx95-19x19-frdm-pro-gmsl.dtb` |
 
+i.MX93 11x11 EVK, 6.18.37-2.1.0: defconfig `imx93_11x11_evk_defconfig`; environment in MMC at
+`0x700000`, `0x4000`, no redundant copy (the boot device's); `image=Image`, `loadaddr=0x80400000`,
+`fdt_addr_r=0x83000000` (the same 44 MiB below the DTB as on the i.MX95, nxp/1 §Debug kernel
+step 5); base / GMSL DTB `imx93-11x11-evk.dtb` / `imx93-11x11-evk-gmsl.dtb`.
+
 Other i.MX boards: the same procedure; the defconfig is `configs/<board>_defconfig` matching the
 device tree's model (search `configs/` for the board name), and the location comes from
 common/10 §Environment location and §CRC search, never from this table.
@@ -38,7 +43,7 @@ The control socket of common/5 §Control socket is open, and nxp/2 §Merged DTB 
 Read `<skill dir>/common/10-uboot-env.md` and follow §Version, §Environment location, §CRC search,
 §Build envtools, §Verify and §Backup and write with the values of §Values. The login on NXP images
 is `root` and the image may have no `sudo`: run common/10's board commands as root, without
-`echo '<pw>' | sudo -S sh -c` (the commands below show that form):
+`SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c` (the commands below show that form):
 - tools in `~/Workspace/uboot-env/` on the board (`fw_printenv`, the `fw_setenv` symlink,
   `fw_env.config`), used with `-c fw_env.config`;
 - the backup of the raw environment there and on the host (`<work_dir>/env_backup_<hostname>.bin`,
@@ -48,7 +53,7 @@ is `root` and the image may have no `sudo`: run common/10's board commands as ro
   ```bash
   ssh -S /tmp/gmsl_ssh_sock root@<ip> -- "cd ~/Workspace/uboot-env && ./fw_setenv -c fw_env.config fdtfile imx95-19x19-frdm-pro-gmsl.dtb && ./fw_printenv -c fw_env.config fdtfile"
   ```
-  (a non-root login: wrap the command in `echo '<pw>' | sudo -S sh -c '...'`).
+  (a non-root login: wrap the command in `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '...'`).
 
 If §CRC search finds **no valid copy** (the environment was never saved on this board), either
 the user runs `saveenv` once on the U-Boot console (common/10 §Console fallback) or, with the
@@ -58,7 +63,7 @@ the control socket, after the backup).
 Then reboot with common/5 §Reboot (and its §Probe check). After the reboot, check that the GMSL DTB
 is the one running (it must print the deserializer node's path):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "find /proc/device-tree -name 'gmsl-deserializer*' | head -1"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /proc/device-tree/ -name 'gmsl-deserializer*' | head -1"
 ```
 If it is not, U-Boot did not use the written environment (wrong copy, or `bootflow scan` found
 another boot entry): see the recovery, and fall back to common/10 §Console fallback.
@@ -88,10 +93,12 @@ Read `<skill dir>/common/10-uboot-env.md` and follow §Version (offline: `string
    `fdtfile="imx95-19x19-frdm-pro.dtb"` (checked with `lf-6.18.37-2.1.0`): grep for
    `^fdtfile=`, not for the unquoted line.
 2. Set `fdtfile=imx95-19x19-frdm-pro-gmsl.dtb` (the `sed` of common/10 §Offline env image step 3
-   replaces the whole line, quotes included; U-Boot accepts the value with or without them).
+   replaces the whole line, quotes included; U-Boot accepts the value with or without them). With
+   the debug kernel (`nxp_debug_kernel` = `True`, nxp/1 §Debug kernel), also set
+   `image=Image-gmsl-debug` the same way (default `image=Image`; check that the line exists).
 3. `mkenvimage` (common/10 §Offline env image, step 4): use the host's `mkenvimage` from the
    `u-boot-tools` package (`command -v mkenvimage`; install it with
-   `echo '<pw>' | sudo -S apt-get install -y u-boot-tools` if missing, and list it in the final
+   `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y u-boot-tools` if missing, and list it in the final
    message as installed on the host). Do not build it with `make tools-only` in NXP's tree: it
    also builds `mkeficapsule`, which needs the GnuTLS headers (`gnutls/gnutls.h: No such file`,
    seen with `lf-6.18.37-2.1.0`), and `make tools/mkenvimage` is not a valid target. Then
@@ -103,14 +110,15 @@ Read `<skill dir>/common/10-uboot-env.md` and follow §Version (offline: `string
    dd if=/tmp/gmsl_env.bin of='<wic>' bs=16384 seek=448 conv=notrunc
    ```
 6. Verify with the CRC script (common/10 §Offline env image, step 7): `CRC OK` and
-   `fdtfile=imx95-19x19-frdm-pro-gmsl.dtb`.
+   `fdtfile=imx95-19x19-frdm-pro-gmsl.dtb` (and `image=Image-gmsl-debug` with the debug kernel).
 
 `uuu ... emmc_all` (nxp/4 §eMMC with uuu) writes the whole `.wic` to the eMMC user area, and `dd`
 of common/11 writes it to the SD card, so the environment at `0x700000` goes with it. nxp/4 checks
 it again on the written medium where it can.
 
-After the first boot: the board boots the GMSL DTB without a console. Recovery: on the U-Boot
-console `setenv fdtfile imx95-19x19-frdm-pro.dtb; saveenv` or `env default -a; saveenv`, or the
+After the first boot: the board boots the GMSL DTB (and the debug kernel) without a console.
+Recovery: on the U-Boot console `setenv fdtfile imx95-19x19-frdm-pro.dtb; setenv image Image;
+saveenv` or `env default -a; saveenv`, or the
 stock `.wic` flashed again. The `fw_setenv` way of §Live board applies only if common/10 §Build
 envtools is run on the board later (the image has no envtools).
 Record `env_written` in `<state>`, delete `/tmp/gmsl_env.txt`, `/tmp/gmsl_env.bin` (the

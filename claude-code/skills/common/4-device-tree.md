@@ -108,7 +108,7 @@ to that device. Choose every alias (and the deserializer pool) so that it is:
 2. not bound in `i2c_devices` of the assessment, and
 3. free when read once on the live board with
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "i2cdetect -y -r <bus> <addr> <addr>"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "i2cdetect -y -r <bus> <addr> <addr>"
    ```
    (ask before probing, as for the deserializer in common/3 §I2C probe). This step catches
    devices that only the bootloader uses (for example a USB-PD controller at `0x52`, which Linux
@@ -309,7 +309,7 @@ DTB**: it is the recovery (the bootloader falls back to it when the setting is u
    §Merged DTB). Copy it to the host:
    ```bash
    mkdir -p /tmp/gen_gmsl_dts/dtb
-   scp -o ControlPath=/tmp/gmsl_ssh_sock <user>@<ip>:<boot dir>/<base_dtb> /tmp/gen_gmsl_dts/dtb/
+   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip>:<boot dir>/<base_dtb> /tmp/gen_gmsl_dts/dtb/
    ```
    (image path: copy it from the mounted boot partition, e.g. `/tmp/gmsl_nxp_boot/<base_dtb>`).
 2. Merge on the host:
@@ -323,12 +323,12 @@ DTB**: it is the recovery (the bootloader falls back to it when the setting is u
 3. Copy `<gmsl_dtb>` next to `<base_dtb>` (ask first on a live board; the boot partition may be
    mounted elsewhere than `/boot`, for example `/run/media/boot-mmcblk0p1`):
    ```bash
-   scp -o ControlPath=/tmp/gmsl_ssh_sock /tmp/gen_gmsl_dts/dtb/<gmsl_dtb> <user>@<ip>:/tmp/gmsl_dtb.tmp
-   ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S sh -c 'cp /tmp/gmsl_dtb.tmp <boot dir>/<gmsl_dtb> && sync'; rm -f /tmp/gmsl_dtb.tmp; ls -l <boot dir>/<base_dtb> <boot dir>/<gmsl_dtb>"
+   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gen_gmsl_dts/dtb/<gmsl_dtb> <user>@<ip>:/tmp/gmsl_dtb.tmp
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'cp /tmp/gmsl_dtb.tmp <boot dir>/<gmsl_dtb> && sync'; rm -f /tmp/gmsl_dtb.tmp; ls -l <boot dir>/<base_dtb> <boot dir>/<gmsl_dtb>"
    ```
    Logged in as `root` (NXP images, which may have no `sudo`): run the same `cp ... && sync`
-   directly, without `echo '<pw>' | sudo -S sh -c`. Image path (host sudo):
-   `echo '<pw>' | sudo -S cp /tmp/gen_gmsl_dts/dtb/<gmsl_dtb> /tmp/gmsl_nxp_boot/`.
+   directly, without `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c`. Image path (host sudo):
+   `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cp /tmp/gen_gmsl_dts/dtb/<gmsl_dtb> /tmp/gmsl_nxp_boot/`.
    Record `gmsl_dtb_name` in `<state>`.
 4. Make the bootloader use it: U-Boot `fdtfile` (common/10, live with `fw_setenv` or offline
    with §Offline env image; or the user on the console, common/10 §Console fallback), or an

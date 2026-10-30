@@ -139,12 +139,17 @@ The MAX96717 serializer driver requires the `gpio_chip.set_rv` API. Check if it'
 already present in the kernel tree before applying the manual backport:
 
 ```bash
-grep -q 'set_rv' <kernel_src_path>/include/linux/gpio/driver.h && echo "present" || echo "missing"
+cd <kernel_src_path>
+if grep -q 'set_rv' include/linux/gpio/driver.h; then echo "set_rv present"
+elif grep -qE 'int[[:space:]]+\(\*set\)\(struct gpio_chip' include/linux/gpio/driver.h; then echo "set returns int"
+else echo "set returns void"; fi
 ```
 
-**If `set_rv` is already present**: skip this step entirely.
-
-**If `set_rv` is missing**: apply the minimal targeted backport:
+- **`set_rv present`**: skip this step.
+- **`set returns int`** (rpi-6.18.y and newer: `.set` already has the `set_rv` signature): skip
+  this step, and adapt the driver in 5a-fix3 instead. The backport below does not fit these
+  kernels (it expects `void (*set)`).
+- **`set returns void`** (older kernels): apply the minimal targeted backport:
 
 ### 4a. Add `set_rv` member to `struct gpio_chip`
 
@@ -285,9 +290,9 @@ fi
 
 ### 5a-fix3. gpio_chip .set_rv → .set adaptation (conditional)
 
-In some newer kernels (rpi-6.19.y+), `gpio_chip.set` already returns `int` (same
-signature as `.set_rv`), making `.set_rv` unnecessary. If `set_rv` is not a member
-of `struct gpio_chip` (Step 4 was skipped), change max96717.c to use `.set` instead:
+In newer kernels (rpi-6.18.y and later), `gpio_chip.set` already returns `int` (same
+signature as `.set_rv`), making `.set_rv` unnecessary. When Step 4 printed `set returns int`,
+change max96717.c to use `.set` instead:
 
 ```bash
 cd <kernel_src_path>
@@ -523,7 +528,7 @@ Every change is skipped when it is already present, so running this twice is saf
 
 ```bash
 cd <kernel_src_path>
-python3 - <<'EOF'
+python3 -I - <<'EOF'
 import re
 
 KCONFIG = 'drivers/media/i2c/Kconfig'
@@ -615,7 +620,7 @@ Expected maxim-serdes contents: `Kconfig`, `Makefile`, `max9296a.c`, `max96717.c
 ## Step 11: Update state
 
 ```bash
-python3 -c "
+python3 -I -c "
 import json
 state = json.load(open('/tmp/gmsl_camera_state.json'))
 state['drivers_added'] = True

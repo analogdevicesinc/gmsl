@@ -30,14 +30,17 @@ ADI_BRANCH="<adi_gmsl_branch>"   # the newest ADI GMSL branch (Step 1)
 ADI_BASE="${ADI_BRANCH#gmsl/}"  # → rpi-6.13.y
 ```
 
-## Step 2: Detect the latest stock RPi kernel branch
+## Step 2: Detect the stock RPi kernel branch
 
-Query the RPi kernel repository for the latest `rpi-6.x.y` branch:
+Use the repository's **default branch**: it is the one Raspberry Pi OS follows (October 2026:
+`rpi-6.18.y`, while the image ships 6.18.50). Newer `rpi-6.x.y` branches can exist before Raspberry
+Pi OS moves to them, or after they are end of life (`rpi-6.19.y` was), so never take the newest one:
 ```bash
-STOCK_BRANCH=$(git ls-remote --heads https://github.com/raspberrypi/linux \
-  | grep -oP 'refs/heads/\Krpi-6\.\d+\.y' | sort -V | tail -1)
+STOCK_BRANCH=$(git ls-remote --symref https://github.com/raspberrypi/linux HEAD \
+  | sed -n 's#^ref: refs/heads/\(rpi-[0-9.]*y\)[[:space:]]*HEAD$#\1#p')
 echo "Stock RPi branch: $STOCK_BRANCH"
 ```
+If it prints nothing, ask the user (the branch list: `git ls-remote --heads ... 'rpi-6.*'`).
 
 Tell the user:
 - "ADI GMSL branch: `<ADI_BRANCH>` (patch source, based on `<ADI_BASE>`)"
@@ -65,7 +68,7 @@ test -d <work_dir>/rpi-linux/.git && git -C <work_dir>/rpi-linux rev-parse --abb
   (branch, `du -sh <work_dir>/rpi-linux`) and ask (header: "Kernel tree"): **Replace it with
   `<STOCK_BRANCH>` (Recommended)** (deletes the old tree) | **Stop**. Delete it only after the user
   agreed (`rm -rf <work_dir>/rpi-linux`; on `Permission denied`, after `sudo make
-  modules_install` in it, repeat with `echo '<pw>' | sudo -S rm -rf <work_dir>/rpi-linux`).
+  modules_install` in it, repeat with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf <work_dir>/rpi-linux`).
 - **No tree:** clone it:
 ```bash
 mkdir -p <work_dir>

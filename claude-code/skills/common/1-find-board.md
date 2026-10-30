@@ -127,8 +127,9 @@ seconds before the next attempt):
    Credentials).
 4. Otherwise ask (§Ask the user).
 
+Each candidate password goes into `/tmp/gmsl_pw_board` first (default logins: `(umask 077; printf '%s\n' analog > /tmp/gmsl_pw_board)`; a password the user typed: the same once, the only command that contains it), and `sshpass -f` reads it:
 ```bash
-sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no \
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no \
   -o ConnectTimeout=10 <user>@<ip> -- \
   "hostname; uname -r; tr -d '\0' < /proc/device-tree/model; echo; tr '\0' ' ' < /proc/device-tree/compatible; echo; test -d ~/Workspace/pyv4l2 && echo pyv4l2; test -d /opt/gen_gmsl_dts && echo gen_gmsl_dts"
 ```

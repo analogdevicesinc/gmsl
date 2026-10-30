@@ -26,6 +26,11 @@ question, and ask the user to confirm before anything is written:
    - **eMMC boot**: the default setting, to switch back.
    Also list anything else the board's manual requires for that mode (for example a jumper, a
    specific USB-C port, removing the SD card for eMMC boot).
+   i.MX93 11x11 EVK, from NXP's getting-started page
+   (`https://www.nxp.com/document/guide/getting-started-with-i-mx93-evk:GS-IMX93EVK`, read
+   October 2026): SW1301[1:4] = `0 1 0 0` SD card (USDHC2, Cortex-A55), `0 0 0 0` eMMC,
+   `1 1 0 0` serial download; power input **J301**, debug UART **J1401**, uuu on **USB1** (the
+   Yocto section of that page calls the switch SW5: use the table).
    FRDM-IMX95-PRO, from NXP's getting-started page
    (`https://www.nxp.com/document/guide/getting-started-with-frdm-imx95-pro:GS-FRDM-IMX95-PRO`,
    read October 2026): SW4[1:3] (BOOT_MODE3..1) = `0 0 1` serial download (USB), `0 1 0` eMMC
@@ -59,7 +64,7 @@ The "No, abort" exception of common/11 §Confirm keeps `<wic>` for manual flashi
 
 After §Write, check the environment on the card (read-only):
 ```bash
-echo '<pw>' | sudo -S dd if=/dev/<sd_device> of=/tmp/gmsl_env/readback.bin bs=16384 skip=448 count=1
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A dd if=/dev/<sd_device> of=/tmp/gmsl_env/readback.bin bs=16384 skip=448 count=1
 python3 -I /tmp/gmsl_envcrc.py /tmp/gmsl_env/readback.bin
 ```
 (`mkdir -p /tmp/gmsl_env` first; the script is the one of common/10 §CRC search, write it again
@@ -81,7 +86,7 @@ the `.wic` to the eMMC over USB while the board is in serial-download mode.
      (Recommended)** | **Install the udev rule**. To install it:
      ```bash
      <work_dir>/uuu/uuu -udev > /tmp/gmsl_70-uuu.rules && cat /tmp/gmsl_70-uuu.rules
-     echo '<pw>' | sudo -S sh -c 'cp /tmp/gmsl_70-uuu.rules /etc/udev/rules.d/70-uuu.rules && udevadm control --reload'
+     SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'cp /tmp/gmsl_70-uuu.rules /etc/udev/rules.d/70-uuu.rules && udevadm control --reload'
      rm -f /tmp/gmsl_70-uuu.rules
      ```
      Record it (`uuu_udev_rule` = `/etc/udev/rules.d/70-uuu.rules` in `<state>`) for the final
@@ -174,6 +179,6 @@ driver check finds the modules of nxp/1, and the probe check shows whether the G
 If the board does not appear within 5 minutes, ask the user to check the boot switches and the
 serial console (`ip -4 addr show`; U-Boot prints the DTB it loads).
 
-Remove the sudo password from `<state>` once nothing more is written on the host
-(`state.pop('sudo_password', None)` with the state snippet of the orchestrator); the orchestrator's
-§Cleanup removes the work copy only if the user does not keep `<work_dir>`.
+Keep the sudo password file until the end of the run (later steps and the verbose package need it;
+§Cleanup deletes it). The orchestrator's §Cleanup removes the work copy only if the user does not
+keep `<work_dir>`.

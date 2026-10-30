@@ -1,7 +1,8 @@
 #!/bin/sh
-# GMSL platform assessment: read-only. Usage: sh assess.sh [sudo password]
-PW="$1"
-S() { if [ "$(id -u)" = 0 ]; then "$@"; else echo "$PW" | sudo -S -p '' "$@"; fi; }
+# GMSL platform assessment: read-only. Usage: sh assess.sh
+# sudo (when not root) reads the password through the skill's helper /tmp/gmsl_askpass on the
+# board (common/2 §Run the assessment); the password is never passed on the command line.
+S() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -x /tmp/gmsl_askpass ]; then SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A "$@"; else sudo -n "$@"; fi; }
 h() { echo; echo "=== $1"; }
 K=/lib/modules/$(uname -r)
 DT=/proc/device-tree
@@ -22,10 +23,15 @@ else echo "source: none (no /proc/config.gz or /boot/config-*)"
   [ -n "$(find $K -name 'configs.ko*' 2>/dev/null | head -1)" ] && echo "note: the 'configs' module exists; 'sudo modprobe configs' would provide /proc/config.gz (not loaded by this read-only script)"; fi
 
 h gmsl_drivers
-for m in max_serdes max96724 max9296a max96717 max96712 max96714 max9286 max9295 max96705 max96706 ds90ub960 ds90ub953 i2c_atr imx219 nv_imx219 ov5640 imx415 videodev v4l2_fwnode; do
-  f=$(find $K -name "$m.ko*" -o -name "$(echo $m | tr _ -).ko*" 2>/dev/null | head -1)
-  if [ -n "$f" ]; then echo "$m: module ${f#$K/} depends=[$(modinfo -F depends $f 2>/dev/null)]"
-  elif grep -qE "/($m|$(echo $m | tr _ -))\.ko" $K/modules.builtin 2>/dev/null; then echo "$m: built-in"; fi
+# modinfo -n follows depmod's priority (updates/ before kernel/), i.e. the file modprobe loads;
+# a second copy elsewhere (e.g. NXP's own max96724.ko or imx219.ko) is listed as "also".
+for m in max_serdes max96724 adi_max96724 max9296a max96717 max96712 max96714 max9286 max9295 max96705 max96706 ds90ub960 ds90ub953 i2c_atr imx219 nv_imx219 ov5640 imx415 videodev v4l2_fwnode; do
+  f=$(modinfo -n $m 2>/dev/null)
+  case "$f" in
+    /*) also=$(find $K -name "$m.ko*" -o -name "$(echo $m | tr _ -).ko*" 2>/dev/null | grep -vxF "$f" | sed "s#^$K/##" | tr '\n' ' ')
+        echo "$m: module ${f#$K/} depends=[$(modinfo -F depends $m 2>/dev/null)]${also:+ also: $also}";;
+    *) grep -qE "/($m|$(echo $m | tr _ -))\.ko" $K/modules.builtin 2>/dev/null && echo "$m: built-in";;
+  esac
 done
 echo "loaded: $(lsmod 2>/dev/null | awk 'NR>1{print $1}' | grep -E 'max|serdes|atr|imx|ov5|ds90|videodev|csi|cfe|unicam|camera|vi5|isp' | tr '\n' ' ')"
 
@@ -111,13 +117,27 @@ find $DT/ -type f -name compatible 2>/dev/null | while read c; do
 done
 
 h shipped_overlays
-# boot partitions are not always mounted at /boot (e.g. /run/media/boot-mmcblk0p1)
-BOOTDIRS="/boot /lib/firmware $(findmnt -rn -t vfat -o TARGET 2>/dev/null | tr '\n' ' ')"
-echo "searched: $BOOTDIRS"
-find $BOOTDIRS -name '*.dtbo' 2>/dev/null | grep -iE 'cam|csi|imx|ov[0-9]|gmsl|max9|serdes|mipi' | head -40
-echo "total dtbo files: $(find $BOOTDIRS -name '*.dtbo' 2>/dev/null | wc -l)"
+# boot partitions are not always mounted at /boot (e.g. /run/media/boot-mmcblk0p1), and a board can
+# hold two systems (SD card and eMMC): the booted one is the vfat partition on the root's disk
+ROOTSRC=$(findmnt -n -o SOURCE / 2>/dev/null)
+case "$ROOTSRC" in /dev/root|"") ROOTSRC=$(sed -n 's/.*root=\([^ ]*\).*/\1/p' /proc/cmdline);; esac
+case "$ROOTSRC" in
+  PARTUUID=*) ROOTSRC=$(readlink -f "/dev/disk/by-partuuid/${ROOTSRC#PARTUUID=}" 2>/dev/null);;
+  UUID=*) ROOTSRC=$(readlink -f "/dev/disk/by-uuid/${ROOTSRC#UUID=}" 2>/dev/null);;
+esac
+ROOTDISK=$(echo "$ROOTSRC" | sed -E 's/p?[0-9]+$//')
+BOOTED=$(findmnt -rn -t vfat -o SOURCE,TARGET 2>/dev/null | awk -v d="$ROOTDISK" 'd != "" && index($1, d) == 1 { print $2; exit }')
+OTHER=$(findmnt -rn -t vfat -o TARGET 2>/dev/null | grep -vxF "${BOOTED:-/nonexistent}" | tr '\n' ' ')
+echo "root: ${ROOTSRC:-unknown}  booted_boot: ${BOOTED:-unknown}"
+BOOTDIRS="$BOOTED /boot /lib/firmware"
+echo "searched: $BOOTDIRS (other boot partitions: ${OTHER:-none})"
+# sort -u: the booted partition can lie inside /boot (Raspberry Pi: /boot/firmware)
+find $BOOTDIRS -name '*.dtbo' 2>/dev/null | sort -u | grep -iE 'cam|csi|imx|ov[0-9]|gmsl|max9|serdes|mipi' | head -60
+echo "total dtbo files: $(find $BOOTDIRS -name '*.dtbo' 2>/dev/null | sort -u | wc -l)"
 # complete board DTBs: camera variants show the receiver wiring (diff them against the base DTB)
-find $BOOTDIRS -maxdepth 2 -name '*.dtb' 2>/dev/null | while read f; do echo "dtb: $f $(stat -c %s "$f")"; done | head -40
+find $BOOTDIRS -maxdepth 2 -name '*.dtb' 2>/dev/null | sort -u | while read f; do echo "dtb: $f $(stat -c %s "$f")"; done | head -200
+# DTBs of another system on the board (not booted): listed only, never used for this run
+[ -n "$OTHER" ] && find $OTHER -maxdepth 2 -name '*.dtb' 2>/dev/null | while read f; do echo "dtb_other: $f"; done | head -200
 
 h media
 for m in /dev/media*; do [ -e "$m" ] || continue; echo "-- $m"; media-ctl -d $m -p 2>/dev/null | grep -E '^(driver|model|bus info)|^- entity' ; done

@@ -35,6 +35,24 @@ the glue from `imx95-19x19-frdm-pro-os08a20-combo-isp.dtb` exactly as for J18 (d
 base DTB, common/4 §Glue), probe the bus and alias pools again (its devices differ), and tell the
 user it is untested; J16 may be shared with DSI (the "combo" PHY).
 
+**i.MX93 11x11 EVK** (`fsl,imx93-11x11-evk`, MCIMX93-BB + MCIMX93-SOMB3), with MAX96724 +
+MAX96717 + IMX219 on J801, NXP 6.18.37-2.1.0:
+
+| Item | Value |
+|------|-------|
+| Variants | the SoM with the PCA9451A PMIC: machine `imx93-11x11-lpddr4x-evk`, base DTB `imx93-11x11-evk.dtb`; the PF0900 variant has its own DTB and `imx-boot` (`...-pmic-pf0900`): ask the user which SoM it is (label on the SoM, or the PMIC part number) |
+| Wiring reference | none for MIPI: NXP's only camera DTB (`imx93-11x11-evk-mt9m114.dtb`) is a parallel camera. Use the base DTB's own `mipi_csi` node (disabled by default) |
+| Connector **J801** (MIPI CSI) | I2C: `lpi2c3` (`i2c@42530000`, Linux `i2c-2`), NXP default 400 kHz; receiver chain: `dphy_rx` (`fsl,imx93-dphy-rx`) → `mipi_csi` (`csi@4ae00000`, `snps,dw-mipi-csi2`, driver `dwc-mipi-csi2`, built into the kernel) → ISI `isi@4ae40000` (one input, **no pixel formatter**); `mipi_csi` port@1 → `isi_in` is already connected in the base DTB |
+| Lanes | **2** (`data-lanes = <1 2>`, `clock-lanes = <0>`), `link-frequencies` 750 MHz, `clock-noncontinuous` |
+| Camera count | **1**: the ISI has one input and the receiver 2 lanes |
+| Camera I2C speed | 100 kHz (`clock-frequency = <100000>` on `lpi2c3`) |
+| Devices on `i2c-2` | `0x34` ADP5585, `0x3c` AP1302 (NXP's ISP on the same CSI input: set `status = "disabled"` in the glue), `0x50`/`0x51` PTN5110 (USB-C), `0x53` PCF2131 (RTC); MAX96724 at `0x27` |
+| Alias pools | deserializer `0x40`–`0x43`, link0 `["0x60","0x61"]` (worked; ADI's i.MX93 JSON uses `0x58`/`0x59`) |
+| Deserializer PHY | AD-GMSLCAMRPI-ADP, cable on **P6** = MAX96724 **PHY 2** (port B) |
+| Glue | `&ap1302 { status = "disabled"; }`, `&dphy_rx`, `&mipi_csi` and `&isi` `status = "okay"`, `&mipi_csi_in` with the lanes and frequency above and `remote-endpoint = <&max_des_0_phy_2_out>` (and back) |
+| Receiver and GMSL mode | needs the receiver patch and GMSL pixel mode: nxp/1 §i.MX93 |
+| ISI RAW10 layout | **right-aligned** (values in the low 10 bits, max 1023), unlike the i.MX95 |
+
 ## JSON
 
 Read `<skill dir>/common/4-device-tree.md` and follow §JSON (glue variant), §Bus speed, §Alias
@@ -185,7 +203,7 @@ Follow common/4 §Merged DTB with `<base_dtb>` = `imx95-19x19-frdm-pro.dtb` and 
   `/run/media/boot-mmcblk0p1` on eMMC boot (the SD card's first partition, e.g.
   `/run/media/boot-mmcblk1p1`, on SD boot). Find it:
   ```bash
-  ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "findmnt -rn -t vfat -o SOURCE,TARGET; ls -l /run/media/*/imx95*.dtb 2>/dev/null"
+  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "findmnt -rn -t vfat -o SOURCE,TARGET; ls -l /run/media/*/imx95*.dtb 2>/dev/null"
   ```
   `<boot dir>` is the mount of the boot device's first partition (the root device of the kernel
   command line, `root=/dev/mmcblk0p2` → `mmcblk0p1`). Check that `<base_dtb>` is the DTB the board
@@ -193,7 +211,7 @@ Follow common/4 §Merged DTB with `<base_dtb>` = `imx95-19x19-frdm-pro.dtb` and 
   merge, and copy `<gmsl_dtb>` back next to it (ask first).
 - **Image:** `<boot dir>` = `/tmp/gmsl_nxp_boot` (nxp/0 §Mount): merge on the host from
   `<tpl_dir>/dtbs/imx95-19x19-frdm-pro.dtb`, then
-  `echo '<pw>' | sudo -S cp /tmp/gen_gmsl_dts/dtb/imx95-19x19-frdm-pro-gmsl.dtb /tmp/gmsl_nxp_boot/`.
+  `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cp /tmp/gen_gmsl_dts/dtb/imx95-19x19-frdm-pro-gmsl.dtb /tmp/gmsl_nxp_boot/`.
 
 Never modify `imx95-19x19-frdm-pro.dtb`: it is the recovery. Record `gmsl_dtb_name` =
 `imx95-19x19-frdm-pro-gmsl.dtb` and `dt_installed` in `<state>`, and continue with nxp/3.
@@ -208,7 +226,11 @@ is a draft. Derive every value of §Values from the board's own files, never fro
    `combo`): diff each against the base DTB (common/4 §Glue) to find, per connector, the I2C bus,
    the receiver chain (CSI PHY, CSI-2 receiver, formatter or gasket, ISI or ISP port), the lanes
    and any reset/power GPIOs. Map the user's connector label to one of them by the DTB name and
-   the I2C bus it uses (common/3 §Hardware questions); ask when it is ambiguous.
+   the I2C bus it uses (common/3 §Hardware questions); ask when it is ambiguous. If NXP ships no
+   MIPI camera DTB for the board (the i.MX93 11x11 EVK has only a parallel `mt9m114` one), use the
+   base DTB's own, disabled receiver nodes (`dphy_rx`, `mipi_csi`, the ISI input) and the board's
+   schematic for the connector's I2C bus, and disable other users of that receiver input (on the
+   i.MX93 EVK the AP1302 ISP).
 3. The I2C bus's devices (live: `i2c_devices` of the assessment and a probe of the alias
    candidates, common/4 §Alias pools; image: the bus's children in the base DTB, and say that
    bootloader-only devices could not be checked).

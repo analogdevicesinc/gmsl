@@ -46,16 +46,27 @@ int main(int argc, char **argv)
 	wb[0] = rb[0]; wb[1] = rb[1]; wb[2] = val;
 	struct i2c_msg wr = { addr, 0, 3, wb };
 
+	/* a dead link makes every transfer time out (~200 ms each): stop after 20 failures in a row */
+	int run = 0, aborted = 0;
 	for (i = 0; i < count; i++) {
 		r = (i & 1) ? xfer(fd, rd, 2) : xfer(fd, &wr, 1);
 		if (gap_us)
 			usleep(gap_us);
-		if (r)
+		if (r) {
 			nerr[-r & 0xff]++;
-		else
+			if (++run >= 20) {
+				aborted = 1;
+				i++;
+				break;
+			}
+		} else {
 			ok++;
+			run = 0;
+		}
 	}
 	printf("bus %d addr 0x%02x reg 0x%04x val 0x%02x gap %d us: %d ok", bus, addr, reg, val, gap_us, ok);
+	if (aborted)
+		printf(" (aborted after %d of %d transfers: 20 failures in a row)", i, count);
 	for (i = 0; i < 256; i++)
 		if (nerr[i])
 			printf(", %s x%d", strerror(i), nerr[i]);

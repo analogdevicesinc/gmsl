@@ -19,10 +19,10 @@ back, and counts errors; it only writes the value it just read.
 Compile `i2cburst` on the board if it has `gcc`, and run it on the deserializer, the serializer
 (through the link) and the sensor:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "mkdir -p ~/Workspace"
-scp -o ControlPath=/tmp/gmsl_ssh_sock <skill dir>/common/i2cburst.c <user>@<ip>:Workspace/
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace && gcc -O2 -o i2cburst i2cburst.c && \
-  ./i2cburst <i2c_bus> <des_addr> <des_reg> 2000; ./i2cburst <ser_bus> <ser_addr> <ser_reg> 2000"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p ~/Workspace"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <skill dir>/common/i2cburst.c <user>@<ip>:Workspace/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace && gcc -O2 -o i2cburst i2cburst.c && \
+  timeout 60 ./i2cburst <i2c_bus> <des_addr> <des_reg> 2000; timeout 60 ./i2cburst <ser_bus> <ser_addr> <ser_reg> 2000"
 ```
 
 **No `gcc` on the board** (common on vendor images, e.g. NXP's Yocto images): cross-compile it on
@@ -30,10 +30,10 @@ the host as a static binary (no dependency on the board's C library) and copy on
 ```bash
 mkdir -p /tmp/gmsl_i2cburst
 aarch64-linux-gnu-gcc -static -O2 -o /tmp/gmsl_i2cburst/i2cburst <skill dir>/common/i2cburst.c
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "mkdir -p ~/Workspace"
-scp -o ControlPath=/tmp/gmsl_ssh_sock /tmp/gmsl_i2cburst/i2cburst <user>@<ip>:Workspace/
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace && chmod +x i2cburst && \
-  ./i2cburst <i2c_bus> <des_addr> <des_reg> 2000; ./i2cburst <ser_bus> <ser_addr> <ser_reg> 2000"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p ~/Workspace"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gmsl_i2cburst/i2cburst <user>@<ip>:Workspace/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace && chmod +x i2cburst && \
+  timeout 60 ./i2cburst <i2c_bus> <des_addr> <des_reg> 2000; timeout 60 ./i2cburst <ser_bus> <ser_addr> <ser_reg> 2000"
 ```
 (`aarch64-linux-gnu-gcc` is in the host tools of common/0 §Host tools, package
 `gcc-aarch64-linux-gnu`; for a non-arm64 board use that board's cross-compiler prefix, e.g. the
@@ -44,13 +44,24 @@ Arguments: `i2cburst <bus> <addr> <reg16> <count> [gap_us]`.
   bus the serializer or sensor appears on once the drivers are bound (the deserializer's I2C ATR
   creates one adapter per link: find it with `i2cdetect -l` and
   `ls /sys/bus/i2c/devices/`), with the address the device has there.
-- Registers without side effects: deserializer `0x0050`, serializer `0x0383` (MAX96717), sensor
-  chip ID `0x0000`.
+- Registers without side effects (read, then written back with the same value):
+
+  | Chip | Address (typical) | Register |
+  |------|-------------------|----------|
+  | MAX96716A, MAX9296A, MAX96792A | `0x28`/`0x2a` (CFG0) | `0x0050` |
+  | MAX96724, MAX96724F, MAX96712 | `0x27` (CFG0) | `0x000d` (device ID, used on the i.MX93) |
+  | MAX96717 serializer | `0x40` through the link | `0x0383` |
+  | IMX219, other sensors | the sensor's address | chip ID `0x0000` |
+
+  Every run is wrapped in `timeout 60`, and `i2cburst` stops after 20 failures in a row (it then
+  prints `aborted`): a dead link makes each transfer time out after about 200 ms, and 2000 of them
+  took more than 5 minutes on the i.MX93. A first run with a count of 20 shows quickly whether
+  the device answers at all.
 - The sensor is often powered off between uses (runtime PM): power it first with
   `echo on > /sys/bus/i2c/devices/<sensor dev>/power/control` (with sudo), run the test, and set
   it back to `auto` after:
   ```bash
-  ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S sh -c 'echo on > /sys/bus/i2c/devices/<sensor dev>/power/control'; cd ~/Workspace && ./i2cburst <sensor_bus> <sensor_addr> 0x0000 2000; echo '<pw>' | sudo -S sh -c 'echo auto > /sys/bus/i2c/devices/<sensor dev>/power/control'"
+  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo on > /sys/bus/i2c/devices/<sensor dev>/power/control'; cd ~/Workspace && timeout 60 ./i2cburst <sensor_bus> <sensor_addr> 0x0000 2000; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo auto > /sys/bus/i2c/devices/<sensor dev>/power/control'"
   ```
 - `i2cburst` uses `I2C_RDWR`, which works while the drivers are bound (unlike `i2ctransfer`
   without `-f`).
@@ -66,8 +77,10 @@ Arguments: `i2cburst <bus> <addr> <reg16> <count> [gap_us]`.
 | Result | Cause and fix |
 |--------|---------------|
 | All OK | Continue |
+| The serializer **and** the sensor fail (and `i2cburst` may abort) only while the sensor is powered (`power/control` = `on`), and all pass while it is suspended (`auto`, before the stream) | A hardware fault behind the deserializer: the serializer board, the camera module, its cable, or the power over coax. Seen on the i.MX93 EVK (serializer 7/20, sensor 3–14/20 even with 100 µs gaps; all 500/500 with the sensor suspended); replacing the serializer board and the camera fixed it (2000/2000). Compare sensor on vs. suspended **first**, and ask the user to swap that hardware before changing the bus speed or the EV kit's jumpers |
 | Failures on the serializer or the sensor (tens of %), bus faster than 100 kHz | The GMSL I2C pass-through needs time between transfers. Confirm with `./i2cburst ... 400 <gap_us>` (gaps of 50, 100, 200 µs: failures stop with a gap), then set the bus to 100 kHz as in common/4 §Bus speed and reboot |
-| Failures on the deserializer itself, or still failures at 100 kHz | Measure with gaps as above. If the deserializer EV kit's µC is connected (common/3 §EV kit checks), a test with its I2C jumpers removed shows whether it is involved (ask first; the user does it, power off first; put them back if it makes no difference). Otherwise check the cable, the adapter switches and the power order |
+| Failures on the deserializer itself, or still failures at 100 kHz | Measure with gaps as above. If the deserializer EV kit's µC is connected (common/3 §EV kit checks), a test with its I2C jumpers removed shows whether it is involved (ask first; the user does it, power off first; put them back if it makes no difference, and ask the user to
+confirm they are fitted again before continuing). Otherwise check the cable, the adapter switches and the power order |
 | Clean idle tests, but failures during probe and stream start (one `-110`, then a few `-5`, mostly on sensor PLL/clock registers and right after serdes reconfiguration) | Not reproducible from user space; seen at 100 kHz with and without the EV kit's µC. A logic analyzer on SCL/SDA shows the cause. As a workaround, and only after the user agrees, retry failed transfers once in the drivers: §Retry workaround |
 
 ## Retry workaround
@@ -107,8 +120,23 @@ Recoveries are logged: every failure and every recovery prints an `i2c-retry:` l
 (adapter, address, register, and the running count of recovered transfers per driver). Report how
 many per boot and per stream start:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "dmesg | grep -c 'i2c-retry:.*OK after'; dmesg | grep 'i2c-retry:' | tail -5"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "dmesg | grep -c 'i2c-retry:.*OK after'; dmesg | grep 'i2c-retry:' | tail -5"
 ```
 If transfers still fail after the retry (a `failed` line without a following `OK after`), the
-workaround is not enough: say so and stop at the frame check's result. Undo: install the drivers
+workaround is not enough: say so and stop at the frame check's result. One exception: during
+probe the serializer driver first tries the serializer's default address on the deserializer's
+own bus (for example `i2c-retry: 42530000.i2c 0x40 reg 0x0000 failed: -5`, seen on the
+FRDM-IMX95-PRO) before it moves it to its alias; such a line is expected when the serializer
+then probes (its subdev and media entity exist). Only failures after probe (stream start,
+register access through the `i2c-<n>-atr` buses) or a serializer that never probes count. Undo: install the drivers
 built without the patch (or remove the commits and rebuild).
+
+## Power-cycling the EV kit
+
+When the user changes anything on the GMSL hardware (jumpers, cables, the serializer board, the
+camera), the order is: **board off → EV kit off → change → EV kit on → board on**. Power-cycling
+only the kit under a running board leaves the serializer without the configuration the drivers
+wrote at probe time: its bus and the sensor's then answer `initial read failed` (`-121`/`-5`),
+seen on the i.MX93 EVK. Afterwards compare the board's boot ID with the one before the change
+(common/5 §Reboot): if it is unchanged, the board did not restart; reboot it (common/5 §Reboot)
+before testing again.

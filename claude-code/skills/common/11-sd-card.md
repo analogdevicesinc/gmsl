@@ -8,23 +8,24 @@ Raspberry Pi OS image) and the NXP SD path (nxp/4 §SD card, image = the prepare
 Parameter: `<image>`, the full path of the (uncompressed) image file to write. The platform file
 gives it.
 
-In this file, `<pw>` is the **host's sudo password** (`sudo_password`, from common/0 §Sudo
+In this file, `<pw>` is the **host's sudo password** (`/tmp/gmsl_pw_sudo`, from common/0 §Sudo
 password; passwordless sudo: use plain `sudo`), not the board's login.
 
-Read from `<state>`: `host` (`wsl` or `linux`), `sudo_password`. Written to `<state>`:
+Read from `<state>`: `host` (`wsl` or `linux`), `sudo_pw_file`. Written to `<state>`:
 `sd_type` (`usb`, `builtin` or `native`), `sd_device`, `sd_busid`, `sd_disk_number`.
 
 Sudo on the host: if the password is empty, `sudo <cmd>`; otherwise
-`echo '<pw>' | sudo -S sh -c '<cmd>'` (common/0 §Sudo password). Here `<pw>` is the **host**
+`SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'` (common/0 §Sudo password). Here `<pw>` is the **host**
 sudo password from `<state>`, not the board's.
 
 On WSL this needs `usbipd` (common/0 §usbipd) for USB readers and `wsl --mount` for built-in
 slots. Check `wsl --mount` support once:
 ```bash
-wsl.exe --mount --help 2>&1 | head -1
+wsl.exe --mount 2>&1 | iconv -f utf-16le -t utf-8 | tr -d '\r' | grep -q 'Invalid command line argument: --mount' && echo "wsl --mount: not supported" || echo "wsl --mount: supported"
 ```
-If the command exists, built-in SD card slots are supported. If not, only USB readers will work:
-inform the user.
+(`wsl.exe` prints UTF-16; `--mount` without arguments prints the usage text when it exists, and
+`Invalid command line argument: --mount` when it does not; `--help` is never accepted.) If it is
+supported, built-in SD card slots can be used. If not, only USB readers will work: inform the user.
 
 **Running Windows commands as administrator:** `usbipd.exe bind` and `wsl.exe --mount` /
 `--unmount` need administrator rights on Windows. Run them directly first. If they fail with an
@@ -73,13 +74,16 @@ unattended); §Confirm re-checks it before writing.
      ```
 4. **Auto-detect the type and attach to WSL (WSL only).**
    - **If a new USB device appeared** (new line in the usbipd diff): extract the bus ID from the
-     new line (format: `<BUSID>  <VID:PID>  <description>  <state>`). Bind (needs administrator
-     rights, see above) and attach:
+     new line (format: `<BUSID>  <VID:PID>  <description>  <state>`). If its state is already
+     `Attached`, skip bind and attach (the reader is in WSL already). If it is `Shared`, only
+     attach. Otherwise bind (needs administrator rights, see above) and attach:
      ```bash
      usbipd.exe bind --busid <busid>
      usbipd.exe attach --wsl --busid <busid>
      ```
-     Store `sd_type = "usb"`, `sd_busid = "<busid>"`.
+     If `bind` warns about USBPcap ("'bind --force' will be required"), tell the user and use
+     `usbipd.exe bind --force --busid <busid>` only with their consent (it bypasses the USB filter
+     driver for that device). Store `sd_type = "usb"`, `sd_busid = "<busid>"`.
    - **Else if a new physical disk appeared** (new line in the Get-Disk diff): the disk number is
      the first field of the new line (e.g. `2|Generic Mass-Storage|USB|...` → `2`). Mount it to WSL
      (needs administrator rights, see above):
@@ -87,16 +91,23 @@ unattended); §Confirm re-checks it before writing.
      wsl.exe --mount '\\.\PHYSICALDRIVE<N>' --bare
      ```
      Store `sd_type = "builtin"`, `sd_disk_number = "<N>"`.
-   - **Else**: no new device detected. Use AskUserQuestion to ask the user to check the SD card
-     and retry, or stop.
+   - **Else**: no new device detected. A reader that was already attached to WSL before the
+     "before" snapshot (for example after a pause) shows no difference either: list the removable
+     USB disks in WSL (`lsblk -dno NAME,SIZE,RM,TRAN,MODEL | awk '$3 == 1 && $2 != "0B"'`); if one
+     is there, confirm it is the card by its contents (step 5) before using it. Otherwise use
+     AskUserQuestion to ask the user to check the SD card and retry, or stop.
 5. **Verify the block device.** Wait 2 seconds, then diff lsblk:
    ```bash
    sleep 2
    lsblk -dno NAME,SIZE > /tmp/gmsl_lsblk_after.txt
    diff /tmp/gmsl_lsblk_before.txt /tmp/gmsl_lsblk_after.txt
    ```
-   Extract the new device name (e.g. `sda` or `mmcblk0`) and store it as `sd_device`. On native
-   Linux, store `sd_type = "native"`.
+   Extract the new device name (e.g. `sda` or `mmcblk0`) and store it as `sd_device`. Ignore new
+   devices of size `0B` (an empty slot of a multi-slot reader). On native Linux, store
+   `sd_type = "native"`. Device names and usbipd bus IDs can change between sessions and after a
+   WSL restart: never reuse a stored `sd_device` or `sd_busid` from an earlier session without
+   detecting the card again; when the card already holds an image, its contents identify it
+   (`lsblk -o NAME,SIZE,LABEL,FSTYPE /dev/<dev>`: partition labels `boot`/`root` on NXP images).
 
    If no new block device appeared, report the error and ask the user to troubleshoot (reseat the
    card or the reader, then repeat from step 1). If more than one new block device appeared, show
@@ -123,7 +134,7 @@ Right before writing:
    ```bash
    lsblk -dno NAME,SIZE,RM,TRAN,MODEL "/dev/<sd_device>" 2>/dev/null
    lsblk -nrpo NAME,MOUNTPOINT "/dev/<sd_device>"
-   findmnt -no SOURCE / /boot /boot/efi 2>/dev/null
+   for m in / /boot /boot/efi; do findmnt -no SOURCE "$m" 2>/dev/null; done   # one path per call: two arguments mean source + target
    ls -l <image>
    ```
    If the device is not found, the SD card may have been removed or the usbipd attachment dropped.
@@ -138,7 +149,8 @@ Right before writing:
    - the device or one of its partitions holds a mounted host filesystem: `/`, `/boot`,
      `/boot/efi` (the `findmnt` sources above are on `/dev/<sd_device>`), any other mount point
      outside `/media`, `/run/media` and `/mnt` (the second `lsblk` command), or, on WSL, the WSL system
-     disk (the device that holds `/`, named by `findmnt -no SOURCE /`).
+     disk (the device that holds `/`: `findmnt -no SOURCE /`, for example `/dev/sdd`; it can
+     change after a WSL restart, so check it every time).
    Show the `lsblk` line to the user, say why it does not look like the SD card, and offer
    **Run §Detect again** | **Stop**. Never flash such a device, even if the user insists: ask
    them to check the device with `lsblk` themselves.
@@ -161,7 +173,7 @@ Desktop Linux usually mounts an inserted SD card's partitions automatically. Unm
 partition of the SD card first, otherwise `dd` writes under a mounted filesystem:
 ```bash
 for p in $(lsblk -nrpo NAME,MOUNTPOINT /dev/<sd_device> | awk '$2 != "" {print $1}'); do
-  echo '<pw>' | sudo -S umount "$p"
+  SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A umount "$p"
 done
 lsblk -nrpo NAME,MOUNTPOINT /dev/<sd_device>
 ```
@@ -170,8 +182,8 @@ report it.
 
 Then flash:
 ```bash
-echo '<pw>' | sudo -S dd if="<image>" of=/dev/<sd_device> bs=4M status=progress conv=fsync
-echo '<pw>' | sudo -S sync
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A dd if="<image>" of=/dev/<sd_device> bs=4M status=progress conv=fsync
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sync
 ```
 This may take several minutes depending on the image size and SD card speed (run it in the
 background for large images and wait for it). Pipe the password into every sudo command after
@@ -180,7 +192,7 @@ afterwards fails with "a terminal is required".
 
 After flashing, verify the SD card has partitions:
 ```bash
-echo '<pw>' | sudo -S partprobe /dev/<sd_device> 2>/dev/null; lsblk "/dev/<sd_device>"
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A partprobe /dev/<sd_device> 2>/dev/null; lsblk "/dev/<sd_device>"
 ```
 Record `image_flashed` in `<state>`.
 

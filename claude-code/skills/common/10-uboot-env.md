@@ -14,7 +14,7 @@ change (old → new) in the question. Everything is built on the host in `<work_
 **Permissions** paragraph of common/9 (`make` runs in the downloaded U-Boot tree). Record
 `env_written` in `<state>`.
 
-The board commands below use `echo '<pw>' | sudo -S` for a normal login. Logged in as `root`
+The board commands below use `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A` for a normal login. Logged in as `root`
 (NXP images, which may have no `sudo`): run the same commands directly, e.g.
 `ssh -S /tmp/gmsl_ssh_sock root@<ip> -- "cd ~/Workspace/uboot-env && ./fw_printenv -c fw_env.config fdtfile"`
 (nxp/3 §Live board shows the NXP commands in that form).
@@ -64,10 +64,10 @@ offset). First check that the offset lies **before the first partition** (`sudo 
 /dev/mmcblk<N>`: start sector × 512 > `ENV_OFFSET` + `ENV_SIZE`). Read the candidates on the
 board into its `/tmp`, copy them to the host, and delete them on the board:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "lsblk -dno NAME,SIZE | grep mmcblk; echo '<pw>' | sudo -S fdisk -l /dev/mmcblk<N> | grep -E '^/dev|Units'"
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S sh -c 'for d in /dev/mmcblk[0-9] /dev/mmcblk[0-9]boot[01]; do [ -b \$d ] || continue; n=\$(basename \$d); dd if=\$d of=/tmp/gmsl_env_\$n.bin bs=1024 skip=\$((<ENV_OFFSET> / 1024)) count=\$((<ENV_SIZE> / 1024)) 2>/dev/null; done; chmod 644 /tmp/gmsl_env_*.bin'"
-mkdir -p /tmp/gmsl_env && scp -o ControlPath=/tmp/gmsl_ssh_sock '<user>@<ip>:/tmp/gmsl_env_*.bin' /tmp/gmsl_env/
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "rm -f /tmp/gmsl_env_*.bin"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "lsblk -dno NAME,SIZE | grep mmcblk; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A fdisk -l /dev/mmcblk<N> | grep -E '^/dev|Units'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'for d in /dev/mmcblk[0-9] /dev/mmcblk[0-9]boot[01]; do [ -b \$d ] || continue; n=\$(basename \$d); dd if=\$d of=/tmp/gmsl_env_\$n.bin bs=1024 skip=\$((<ENV_OFFSET> / 1024)) count=\$((<ENV_SIZE> / 1024)) 2>/dev/null; done; chmod 644 /tmp/gmsl_env_*.bin'"
+mkdir -p /tmp/gmsl_env && scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes '<user>@<ip>:/tmp/gmsl_env_*.bin' /tmp/gmsl_env/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "rm -f /tmp/gmsl_env_*.bin"
 ```
 (boot partitions are read-only block devices, `dd` reading them is fine; repeat with
 `<ENV_OFFSET_REDUND>` if set. `bs=1024` needs offset and size in whole KiB, as usual; otherwise
@@ -102,7 +102,7 @@ cd <work_dir>/uboot-<tag> && make <board>_defconfig && make CROSS_COMPILE=<prefi
 §Compiler). The result is linked against the toolchain's C library: check that the board's glibc
 is at least the newest version it needs:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "ldd --version | head -1"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "ldd --version | head -1"
 <prefix>objdump -T tools/env/fw_printenv | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -1
 ```
 If the board's glibc is older, build with an older toolchain or `LDFLAGS=-static`
@@ -113,9 +113,9 @@ Copy `tools/env/fw_printenv` to the board into a working folder, `~/Workspace/ub
 <size>` (plus a second line for a redundant copy). Use `-c <config>` on every call instead of
 creating `/etc/fw_env.config`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "mkdir -p ~/Workspace/uboot-env"
-scp -o ControlPath=/tmp/gmsl_ssh_sock <work_dir>/uboot-<tag>/tools/env/fw_printenv <user>@<ip>:Workspace/uboot-env/
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace/uboot-env && ln -sf fw_printenv fw_setenv && printf '%s %s %s\n' <device> <offset> <size> > fw_env.config && cat fw_env.config"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p ~/Workspace/uboot-env"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <work_dir>/uboot-<tag>/tools/env/fw_printenv <user>@<ip>:Workspace/uboot-env/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace/uboot-env && ln -sf fw_printenv fw_setenv && printf '%s %s %s\n' <device> <offset> <size> > fw_env.config && cat fw_env.config"
 ```
 (e.g. `/dev/mmcblk0 0x700000 0x4000`.)
 
@@ -123,7 +123,7 @@ ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace/uboot-env && ln -sf fw_
 
 Read-only:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace/uboot-env && echo '<pw>' | sudo -S ./fw_printenv -c fw_env.config fdtfile"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace/uboot-env && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A ./fw_printenv -c fw_env.config fdtfile"
 ```
 It must print the value found in §CRC search. Also save the whole environment on the host
 (`./fw_printenv -c fw_env.config > ...`, as `/tmp/gmsl_env/printenv_before.txt`) for the round
@@ -135,18 +135,18 @@ nxp/3: `bootflow scan -l` and the distro/`mmcboot` scripts).
 Before the first write, back up the raw environment (`dd` of the same bytes) on the board and on
 the host:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S dd if=<device> of=\$HOME/Workspace/uboot-env/env_backup.bin bs=1024 skip=\$((<offset> / 1024)) count=\$((<size> / 1024)) && echo '<pw>' | sudo -S chown \$(id -u):\$(id -g) ~/Workspace/uboot-env/env_backup.bin"
-scp -o ControlPath=/tmp/gmsl_ssh_sock <user>@<ip>:Workspace/uboot-env/env_backup.bin <work_dir>/env_backup_<hostname>.bin
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A dd if=<device> of=\$HOME/Workspace/uboot-env/env_backup.bin bs=1024 skip=\$((<offset> / 1024)) count=\$((<size> / 1024)) && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A chown \$(id -u):\$(id -g) ~/Workspace/uboot-env/env_backup.bin"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip>:Workspace/uboot-env/env_backup.bin <work_dir>/env_backup_<hostname>.bin
 ```
 Optionally test a round trip with a harmless variable (set, read back, delete, compare the full
 `fw_printenv` output with the one before):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace/uboot-env && echo '<pw>' | sudo -S sh -c './fw_setenv -c fw_env.config gmsl_test 1 && ./fw_printenv -c fw_env.config gmsl_test && ./fw_setenv -c fw_env.config gmsl_test && ./fw_printenv -c fw_env.config'" > /tmp/gmsl_env/printenv_after.txt
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace/uboot-env && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c './fw_setenv -c fw_env.config gmsl_test 1 && ./fw_printenv -c fw_env.config gmsl_test && ./fw_setenv -c fw_env.config gmsl_test && ./fw_printenv -c fw_env.config'" > /tmp/gmsl_env/printenv_after.txt
 diff <(grep -v '^gmsl_test=' /tmp/gmsl_env/printenv_after.txt) /tmp/gmsl_env/printenv_before.txt
 ```
 Then, after the user agreed, note the old value and write the GMSL DTB name:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cd ~/Workspace/uboot-env && echo '<pw>' | sudo -S sh -c './fw_setenv -c fw_env.config fdtfile <gmsl_dtb name> && ./fw_printenv -c fw_env.config fdtfile'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace/uboot-env && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c './fw_setenv -c fw_env.config fdtfile <gmsl_dtb name> && ./fw_printenv -c fw_env.config fdtfile'"
 ```
 A reboot (common/5 §Reboot) then shows that U-Boot accepts it: the board boots the `fdtfile`
 that was written (check `/sys/firmware/fdt` contains the deserializer node, or the probe check).
