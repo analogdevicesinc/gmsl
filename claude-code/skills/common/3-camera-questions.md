@@ -127,6 +127,11 @@ Pi the platform file gives the bus (rpi/4 §Troubleshooting: bus 10 for RPi 5 CA
 CAM1 the bus of `i2c_csi_dsi1` from `i2cdetect -l`); on an NXP board nxp/2 §Values gives it for
 the FRDM-IMX95-PRO; otherwise the candidates come from the device tree.
 
+**Raspberry Pi:** the camera I2C bus (`i2c_csi_dsi0`/`i2c_csi_dsi1`, bus 10 on the RPi 5 CAM0)
+exists only once a camera overlay enables it, so on a Pi without the GMSL overlay installed yet
+it is not there (`i2cdetect -l` lists only buses such as 13 and 14). Then skip this section and
+§Path check here: rpi/4 §Order runs them after the overlay and the reboot.
+
 Ask the user first (header: "I2C probe"): probing reads one address on each candidate bus, which
 is normally harmless, but on unknown hardware it is still bus traffic:
 **Probe (Recommended)** | **Skip** (use the bus the platform file or the vendor DT associates with
@@ -142,12 +147,12 @@ address of the chosen deserializer (from `<tpl_dir>/<chip>.dtsi.in`, `default_ad
 templates are downloaded: common/4 §Templates): MAX96724/MAX96724F `0x27`, MAX96712 `0x29`,
 MAX9296A `0x48`, MAX96716A `0x2a`, MAX96714/MAX96792A `0x4c`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "i2cdetect -y -r <bus> <addr> <addr>"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "i2cdetect -y -r <bus> <addr> <addr>"
 ```
 (use the control socket of common/5 §Control socket if it is open, or plain
-`sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no <user>@<ip> -- "..."` before it exists;
+`sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- "..."` before it exists;
 `i2cdetect` is in `i2c-tools`; if it is missing, the platform file's **Tools** section installs
-it, after asking). Root rights: as a normal user, run it with `echo '<pw>' | sudo -S sh -c '...'`.
+it, after asking). Root rights: as a normal user, run it with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '...'`.
 
 - A device at the address on exactly one bus: that is `<i2c_bus>`.
 - A device at the address on more than one bus: tell the user which buses, and use the one the
@@ -196,7 +201,7 @@ other images do not have them). Driver for each chip:
 
 Check each driver needed for the chosen hardware, as a loadable module or built into the kernel:
 ```bash
-sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 <user>@<ip> -- '
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 <user>@<ip> -- '
 K=/lib/modules/$(uname -r); echo "kernel: $(uname -r)"; . /etc/os-release; echo "os: $PRETTY_NAME"
 for m in max-serdes <deserializer_driver> <serializer_driver> <sensor_drivers>; do
   u=$(echo $m | tr - _)
@@ -206,7 +211,7 @@ for m in max-serdes <deserializer_driver> <serializer_driver> <sensor_drivers>; 
 done'
 ```
 (on Windows, use common/0 §Windows adaptations instead of `sshpass`; through the control socket,
-`ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- '...'`).
+`ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- '...'`).
 
 A module with the right name is not always the ADI driver: vendor kernels can ship their own
 `max96724`/`max96717` drivers (NXP: `max96724`, `max96717_lib`), which are not compatible with the

@@ -7,19 +7,25 @@ the user. At the end, the state holds `platform` and `board_home`.
 `<tpl_dir>` = `/tmp/gen_gmsl_dts/<platform>`. The platform is not known before §Platform
 selection: save everything in `/tmp/gen_gmsl_dts/assess` first, and move the folder to
 `<tpl_dir>` once the platform is selected (`mkdir -p /tmp/gen_gmsl_dts && mv` — if `<tpl_dir>`
-already exists from an earlier deployment in this run, move only the files). All of it is
+already exists from an earlier deployment in this run, move only the files). On the build path
+(`entry` = `prepare`) `<tpl_dir>` already holds the image's `board.config` and `dtbs/` from nxp/0:
+rename those first to `board.image.config` and `dtbs.image/`, so the board's live files do not
+overwrite them (both describe the same release; keep the image's for the record). All of it is
 deleted by the orchestrator's §Cleanup (with `/tmp/gen_gmsl_dts`); none of it is copied
 anywhere else, except what generic/2 §Artifacts package lists.
 
 ## Run the assessment
 
-Copy `<skill dir>/common/assess.sh` to the board and run it. It only reads; the password is used
-for `sudo dmesg`, `fw_printenv` and reading `/sys/firmware/fdt` (as root it needs none). Save the
-report on the host:
+Copy `<skill dir>/common/assess.sh` to the board and run it. It only reads; sudo is used for
+`dmesg`, `fw_printenv` and reading `/sys/firmware/fdt` (as root it needs none). When the login is
+not `root`, first put the board password and the sudo helper on the board, the same way as
+common/5 §Control socket (no password in a command; the helper is used by this file and later
+ones, and deleted by the orchestrator's §Cleanup step 3). Then save the report on the host:
 ```bash
 mkdir -p /tmp/gen_gmsl_dts/assess
-sshpass -p '<pw>' scp -o StrictHostKeyChecking=no <skill dir>/common/assess.sh <user>@<ip>:/tmp/gmsl_assess.sh
-sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no <user>@<ip> -- "sh /tmp/gmsl_assess.sh '<pw>'; rm -f /tmp/gmsl_assess.sh" > /tmp/gen_gmsl_dts/assess/assess_report.txt 2>&1
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <user>@<ip> -- "umask 077; cat > /tmp/gmsl_pw_board; printf '#!/bin/sh\ncat /tmp/gmsl_pw_board\n' > /tmp/gmsl_askpass; chmod 700 /tmp/gmsl_askpass" < /tmp/gmsl_pw_board   # not root only
+sshpass -f /tmp/gmsl_pw_board scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <skill dir>/common/assess.sh <user>@<ip>:/tmp/gmsl_assess.sh
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <user>@<ip> -- "sh /tmp/gmsl_assess.sh; rm -f /tmp/gmsl_assess.sh" > /tmp/gen_gmsl_dts/assess/assess_report.txt 2>&1
 ```
 (on Windows, use common/0 §Windows adaptations; the report then goes to
 `%TEMP%\gen_gmsl_dts\assess\assess_report.txt`). The report ends with `=== end`; if it does not,
@@ -27,7 +33,7 @@ the script was interrupted (connection lost): run it again once, then report the
 
 Also save the running device tree on the host, for the later steps (common/3, common/4):
 ```bash
-sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no <user>@<ip> -- "echo '<pw>' | sudo -S -p '' cat /sys/firmware/fdt" > /tmp/gen_gmsl_dts/assess/running.dtb
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cat /sys/firmware/fdt" > /tmp/gen_gmsl_dts/assess/running.dtb
 dtc -q -I dtb -O dts -o /tmp/gen_gmsl_dts/assess/running.dts /tmp/gen_gmsl_dts/assess/running.dtb
 ```
 (as `root`, or on images without `sudo`, run `cat /sys/firmware/fdt` directly). If
@@ -37,11 +43,15 @@ dtc -q -I dtb -O dts -o /tmp/gen_gmsl_dts/assess/running.dts /tmp/gen_gmsl_dts/a
 Also save the board's kernel config (Build mode needs it: common/9, nxp/1) and its DTB files (the
 glue is modelled on the vendor's camera DTBs: common/4 §Glue, nxp/2):
 ```bash
-sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no <user>@<ip> -- 'zcat /proc/config.gz' > /tmp/gen_gmsl_dts/assess/board.config 2>/dev/null || rm -f /tmp/gen_gmsl_dts/assess/board.config
-mkdir -p /tmp/gen_gmsl_dts/assess/dtbs; for f in <DTB files listed under shipped_overlays>; do sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no <user>@<ip> -- "cat $f" > /tmp/gen_gmsl_dts/assess/dtbs/$(basename $f); done
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- 'zcat /proc/config.gz' > /tmp/gen_gmsl_dts/assess/board.config 2>/dev/null || rm -f /tmp/gen_gmsl_dts/assess/board.config
+mkdir -p /tmp/gen_gmsl_dts/assess/dtbs; for f in <DTB files listed under shipped_overlays>; do sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- "cat $f" > /tmp/gen_gmsl_dts/assess/dtbs/$(basename $f); done
 ```
 `<DTB files listed under shipped_overlays>`: the paths of the `dtb: <path> <size>` lines and the
-camera `*.dtbo` lines of the report's `shipped_overlays` section. On a Raspberry Pi, skip the DTB
+camera `*.dtbo` lines of the report's `shipped_overlays` section. They come from the boot
+partition of the system that is running (`booted_boot:`, the vfat partition on the root
+file system's disk). `dtb_other:` lines belong to another system on the board (for example the
+eMMC of a board booted from an SD card): never copy or use them. If `booted_boot:` is `unknown`,
+ask the user which boot partition the board booted from. On a Raspberry Pi, skip the DTB
 copy (the rpi platform uses ADI's platform templates, not the vendor DTBs). Check that every
 copied file has the size the report lists.
 
@@ -75,7 +85,7 @@ Read from the report (section names in brackets) and from the identify command o
 - **Home folder** of the login, `<board_home>`. Do not assume it: root's home is `/root` on most
   images, including NXP's Yocto images:
   ```bash
-  sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no <user>@<ip> -- 'echo $HOME'
+  sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- 'echo $HOME'
   ```
   Use `~` or `$HOME` in remote commands, or the stored `<board_home>` where a full path is
   needed (an `scp` target, a file written into the board's configuration), never
@@ -128,7 +138,7 @@ import json
 state = json.load(open('/tmp/gmsl_camera_state.json'))
 state['platform'] = '<rpi|nxp|generic>'
 state['rpi_model'] = '<5|4, rpi only>'
-state['nxp_board'] = '<FRDM-IMX95-PRO|other-imx, nxp only>'
+state['nxp_board'] = '<FRDM-IMX95-PRO|IMX93-11X11-EVK|other-imx, nxp only>'   # IMX93-11X11-EVK: compatible fsl,imx93-11x11-evk
 state['nxp_model'] = '<model string M, other-imx only>'
 json.dump(state, open('/tmp/gmsl_camera_state.json', 'w'), indent=2)
 "

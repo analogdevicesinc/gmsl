@@ -22,8 +22,8 @@ Find the media device that contains the deserializer (entity `<driver> <bus>-<ad
 `max96716a 2-0028`), and print its topology. The output is long on SoCs with ISPs: save it to a
 file and filter the chain's entities:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "for m in /dev/media*; do media-ctl -d \$m -p > /tmp/gmsl_topo_\$(basename \$m).txt 2>&1; grep -l -E 'max9296a|max96716|max96724|max96712|max96792|max96714' /tmp/gmsl_topo_\$(basename \$m).txt; done"
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "grep -nE '^- entity|^\s+pad|->|<-|\[fmt|routes|\[ACTIVE\]' /tmp/gmsl_topo_<mediaN>.txt | head -150"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "for m in /dev/media*; do media-ctl -d \$m -p > /tmp/gmsl_topo_\$(basename \$m).txt 2>&1; grep -l -E 'max9296a|max96716|max96724|max96712|max96792|max96714' /tmp/gmsl_topo_\$(basename \$m).txt; done"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "grep -nE '^- entity|^\s+pad|->|<-|\[fmt|routes|\[ACTIVE\]' /tmp/gmsl_topo_<mediaN>.txt | head -150"
 ```
 Copy the file to the host if it helps (`scp -o ControlPath=/tmp/gmsl_ssh_sock
 <user>@<ip>:/tmp/gmsl_topo_<mediaN>.txt /tmp/`), and delete the board's `/tmp/gmsl_topo_*` files
@@ -35,7 +35,7 @@ each entity its name (quoted in `media-ctl` commands), its pads, and whether it 
 Check the link from the deserializer's source pad `<S>` to the receiver: if it is not
 `[ENABLED]`, enable it:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "media-ctl -d <mediaN> -l '\"<des entity>\":<S> -> \"<receiver entity>\":0[1]'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "media-ctl -d <mediaN> -l '\"<des entity>\":<S> -> \"<receiver entity>\":0[1]'"
 ```
 Enable every other disabled link of the chain the same way (e.g. receiver → formatter → ISI).
 
@@ -43,7 +43,7 @@ Receivers that fan one input out to several channels (for example NXP's ISI cros
 routes its sink to all 8 channels by default) need a **single route** to the channel that is
 captured, e.g.:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "media-ctl -d <mediaN> -R '\"crossbar\" [2/0 -> 5/0 [1]]'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "media-ctl -d <mediaN> -R '\"crossbar\" [2/0 -> 5/0 [1]]'"
 ```
 (the platform file gives the pads; nxp/5 §Configure pipeline for i.MX95).
 
@@ -102,7 +102,7 @@ device of a camera is the one linked to the receiver output (channel) its route 
 **Check** with `media-ctl -p` that every pad/stream of the chain shows the same code, size and
 field, and that the routes are `[ACTIVE]`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "media-ctl -d <mediaN> -p | grep -nE '^- entity|pad[0-9]|fmt:|->|\[ACTIVE\]'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "media-ctl -d <mediaN> -p | grep -nE '^- entity|pad[0-9]|fmt:|->|\[ACTIVE\]'"
 ```
 
 **Metadata fallback:** if streaming then fails because the sensor still sends metadata that
@@ -125,7 +125,7 @@ this numbering.
 Write the commands to `~/Workspace/media_cfg.sh`: `#!/bin/sh`, `set -e`, a comment with the
 configuration (deserializer, PHY, cameras, sensor mode, date). `chmod +x` it and run it.
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo \$HOME; mkdir -p ~/Workspace"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "echo \$HOME; mkdir -p ~/Workspace"
 cat > /tmp/gmsl_media_cfg.sh <<'EOF'
 #!/bin/sh
 # GMSL pipeline: <deserializer> PHY <phy_idx>, <n> camera(s) <sensor> <w>x<h> <code>
@@ -138,9 +138,9 @@ media-ctl -d $M -V '"<sensor entity>":0 [fmt:<code>/<w>x<h> field:none]'
 # ... every pad/stream of the chain, receiver routes, crossbar route ...
 v4l2-ctl -d <dev_path> --set-fmt-video=width=<w>,height=<h>,pixelformat=<fourcc>
 EOF
-scp -o ControlPath=/tmp/gmsl_ssh_sock /tmp/gmsl_media_cfg.sh <user>@<ip>:Workspace/media_cfg.sh
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gmsl_media_cfg.sh <user>@<ip>:Workspace/media_cfg.sh
 rm -f /tmp/gmsl_media_cfg.sh
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "chmod +x ~/Workspace/media_cfg.sh && ~/Workspace/media_cfg.sh"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "chmod +x ~/Workspace/media_cfg.sh && ~/Workspace/media_cfg.sh"
 ```
 `~` is the login's home folder; do not assume it: root's home is `/root` on most images,
 including NXP's Yocto images. Check with `echo $HOME` (state `board_home`) and use `~` or

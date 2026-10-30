@@ -19,7 +19,7 @@ aarch64-linux-gnu-gcc --version
 If this fails, the cross-compiler was not installed by common/0 §Host tools. Install it (sudo as
 in common/0 §Sudo password):
 ```bash
-echo '<pw>' | sudo -S apt-get install -y gcc-aarch64-linux-gnu
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y gcc-aarch64-linux-gnu
 ```
 
 ## Step 2: Select defconfig
@@ -99,6 +99,19 @@ cd <kernel_src_path>
 
 # Platform CSI receiver (upstream, streams-capable version)
 ./scripts/config --set-val CONFIG_VIDEO_RP1_CFE y
+
+# Kernel debugging: dynamic debug (pr_debug/dev_dbg of the GMSL drivers can be switched on at
+# run time through /sys/kernel/debug/dynamic_debug/control) and function tracing (ftrace).
+# DYNAMIC_FTRACE depends on FUNCTION_TRACER: without it, the build's own config sync turns
+# DYNAMIC_FTRACE off again. The stock RPi defconfigs set none of these.
+./scripts/config --set-val CONFIG_DYNAMIC_DEBUG y
+./scripts/config --set-val CONFIG_FTRACE y
+./scripts/config --set-val CONFIG_FUNCTION_TRACER y
+./scripts/config --set-val CONFIG_DYNAMIC_FTRACE y
+
+# Kernel config readable on the board (/proc/config.gz), for common/2 and debugging
+./scripts/config --set-val CONFIG_IKCONFIG y
+./scripts/config --set-val CONFIG_IKCONFIG_PROC y
 ```
 
 ### 4c. Disable conflicting drivers and options
@@ -130,7 +143,8 @@ for cfg in CONFIG_MEDIA_SUPPORT CONFIG_VIDEO_DEV CONFIG_I2C_MUX \
            CONFIG_VIDEOBUF2_MEMOPS CONFIG_VIDEOBUF2_DMA_CONTIG \
            CONFIG_VIDEO_MAXIM_SERDES CONFIG_VIDEO_MAX9296A CONFIG_VIDEO_MAX96717 \
            CONFIG_VIDEO_MAX96724 CONFIG_I2C_ATR CONFIG_VIDEO_IMX219 \
-           CONFIG_VIDEO_RP1_CFE; do
+           CONFIG_VIDEO_RP1_CFE CONFIG_DYNAMIC_DEBUG CONFIG_FTRACE \
+           CONFIG_FUNCTION_TRACER CONFIG_DYNAMIC_FTRACE CONFIG_IKCONFIG CONFIG_IKCONFIG_PROC; do
   val=$(grep "^${cfg}=" .config | cut -d= -f2)
   if [ "$val" = "m" ]; then
     echo "Forcing $cfg from =m to =y"
@@ -138,10 +152,11 @@ for cfg in CONFIG_MEDIA_SUPPORT CONFIG_VIDEO_DEV CONFIG_I2C_MUX \
   fi
 done
 
-grep -E 'CONFIG_VIDEO_MAXIM_SERDES|CONFIG_VIDEO_MAX9296A|CONFIG_VIDEO_MAX96717|CONFIG_VIDEO_MAX96724|CONFIG_I2C_ATR|CONFIG_VIDEO_IMX219|CONFIG_VIDEO_RP1_CFE|CONFIG_VIDEO_RP1_CFE_DOWNSTREAM|CONFIG_MODVERSIONS' .config
+grep -E 'CONFIG_VIDEO_MAXIM_SERDES|CONFIG_VIDEO_MAX9296A|CONFIG_VIDEO_MAX96717|CONFIG_VIDEO_MAX96724|CONFIG_I2C_ATR|CONFIG_VIDEO_IMX219|CONFIG_VIDEO_RP1_CFE|CONFIG_VIDEO_RP1_CFE_DOWNSTREAM|CONFIG_MODVERSIONS|CONFIG_DYNAMIC_DEBUG|CONFIG_FTRACE|CONFIG_FUNCTION_TRACER|CONFIG_DYNAMIC_FTRACE' .config
 ```
 
-Expected output should show `=y` for all GMSL/sensor/CSI configs, `not set` for
+Expected output should show `=y` for all GMSL/sensor/CSI configs and the four debugging options
+(`CONFIG_DYNAMIC_DEBUG`, `CONFIG_FTRACE`, `CONFIG_FUNCTION_TRACER`, `CONFIG_DYNAMIC_FTRACE`), `not set` for
 `CONFIG_VIDEO_RP1_CFE_DOWNSTREAM` and `CONFIG_MODVERSIONS`.
 
 ### 4e. Verify V4L2 streams API is enabled
@@ -172,8 +187,8 @@ This will take several minutes depending on the host machine. The `-j$(nproc)` f
 uses all available CPU cores.
 
 If the build fails, check the error output. Common issues:
-- Missing `libssl-dev`: install with `echo '<pw>' | sudo -S apt-get install -y libssl-dev`
-- Missing `flex`/`bison`: install with `echo '<pw>' | sudo -S apt-get install -y flex bison`
+- Missing `libssl-dev`: install with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y libssl-dev`
+- Missing `flex`/`bison`: install with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y flex bison`
 
 ## Step 6: Verify build output
 
@@ -184,13 +199,18 @@ ls <kernel_src_path>/arch/arm64/boot/dts/broadcom/*.dtb >/dev/null 2>&1 && echo 
 ls <kernel_src_path>/arch/arm64/boot/dts/overlays/*.dtbo >/dev/null 2>&1 && echo "Overlays: ok" || echo "Overlays: MISSING"
 ```
 
-Verify that GMSL drivers are built-in (not modules):
+Verify that GMSL drivers are built-in (not modules) and that the debugging options survived the
+build's config sync:
 ```bash
-grep -E 'CONFIG_VIDEO_MAXIM_SERDES|CONFIG_VIDEO_MAX96724|CONFIG_VIDEO_IMX219' <kernel_src_path>/.config
+grep -E 'CONFIG_VIDEO_MAXIM_SERDES|CONFIG_VIDEO_MAX96724|CONFIG_VIDEO_IMX219|CONFIG_DYNAMIC_DEBUG=|CONFIG_FTRACE=|CONFIG_FUNCTION_TRACER=|CONFIG_DYNAMIC_FTRACE=|CONFIG_IKCONFIG=|CONFIG_IKCONFIG_PROC=' <kernel_src_path>/.config
 ```
 
-All should show `=y`. If any show `=m`, the driver will need `modules_install` and
-module file management on the target — go back to Step 4 and fix.
+All should show `=y`. If any GMSL driver shows `=m`, the driver will need `modules_install` and
+module file management on the target — go back to Step 4 and fix. If a debugging option is
+missing, its dependency was not met on this kernel (for `CONFIG_DYNAMIC_FTRACE`:
+`CONFIG_FUNCTION_TRACER`; read its `depends on` lines in `kernel/trace/Kconfig` or
+`lib/Kconfig.debug`): tell the user,
+it does not affect the camera.
 
 Report the kernel version:
 ```bash
@@ -204,6 +224,8 @@ python3 -c "
 import json
 state = json.load(open('/tmp/gmsl_camera_state.json'))
 state['kernel_built'] = True
+state['kernel_release'] = '<the release printed by Step 6, e.g. 6.18.50-v8-16k+>'
+state['localversion'] = '<the CONFIG_LOCALVERSION of .config, e.g. -v8-16k>'
 json.dump(state, open('/tmp/gmsl_camera_state.json', 'w'), indent=2)
 "
 ```

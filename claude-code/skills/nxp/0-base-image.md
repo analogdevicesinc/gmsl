@@ -9,7 +9,7 @@ board after the first boot.
 Run after common/0 (host tools, sudo password) and the flash-medium question (`flash_medium` in
 `<state>`). The camera questions of common/3 are asked before or after this file (orchestrator
 §Flow): the device tree is built offline from the image's DTBs. All local sudo commands follow
-common/0 §Sudo password (`echo '<pw>' | sudo -S sh -c '<cmd>'`). `<tpl_dir>` =
+common/0 §Sudo password (`SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'`). `<tpl_dir>` =
 `/tmp/gen_gmsl_dts/nxp`.
 
 Tested: FRDM-IMX95-PRO with NXP i.MX Linux 6.18.20-2.0.0 (i.MX Distro 6.18-wrynose, Yocto
@@ -55,14 +55,14 @@ ask for the path with AskUserQuestion (header: "NXP image"; the question text co
 download URL of step 2): the user types the path in "Other"
 (a Windows path on WSL, `C:\Users\...`, is converted with `wslpath -u '<path>'`). Check that the
 file exists and is readable (`ls -l '<path>'`), and record it (`nxp_board` normalized as in the
-orchestrator's §State: `FRDM-IMX95-PRO`, or `other-imx` with the named board in `nxp_model`;
+orchestrator's §State: `FRDM-IMX95-PRO`, `IMX93-11X11-EVK`, or `other-imx` with the named board in `nxp_model`;
 keep the values the orchestrator's Q2/Q3 already stored):
 ```bash
 python3 -c "
 import json
 state = json.load(open('/tmp/gmsl_camera_state.json'))
 state['nxp_image_path'] = '<path>'
-state['nxp_board'] = '<FRDM-IMX95-PRO|other-imx>'
+state['nxp_board'] = '<FRDM-IMX95-PRO|IMX93-11X11-EVK|other-imx>'
 state['nxp_model'] = '<the board the user named, other-imx only>'
 json.dump(state, open('/tmp/gmsl_camera_state.json', 'w'), indent=2)
 "
@@ -84,7 +84,8 @@ mkdir -p <work_dir>/nxp-image
 unzip -l '<nxp_image_path>' | grep -iE '\.wic(\.zst|\.bz2)?$|imx-boot|flash'
 ```
 Pick the files for the board, by its Yocto machine name (FRDM-IMX95-PRO:
-`imx95-19x19-lpddr5-frdm-pro`; the running board's hostname is the machine name on NXP images):
+`imx95-19x19-lpddr5-frdm-pro`; i.MX93 11x11 EVK with the PCA9451A PMIC:
+`imx93-11x11-lpddr4x-evk`, image `imx-image-full-imx93evk.wic`; the running board's hostname is the machine name on NXP images):
 - the root filesystem image: `*<machine>*.wic.zst` (or `.wic.bz2`, `.wic`); prefer the full
   image with the desktop (`imx-image-full-*`, Weston is needed for the viewer) over
   `core-image-minimal`/`multimedia` if several are listed;
@@ -111,19 +112,47 @@ they name into `<work_dir>/nxp-image/` too.
 Keep `<wic>` = `<work_dir>/nxp-image/<name>.wic` and `<imx_boot>` =
 `<work_dir>/nxp-image/<imx-boot file>` for the later files.
 
+**Board bootloader in the `.wic`.** An NXP release can ship one `.wic` for several boards of a
+SoC, with another board's bootloader inside. Release 6.18.37-2.1.0 for the i.MX 95 has only
+`imx-image-full-imx95evk.wic`, whose bootloader is the 19x19 EVK's; the FRDM-IMX95-PRO's comes
+only as `imx-boot-imx95-19x19-lpddr5-frdm-pro-sd.bin-flash_all`. Booting from an SD card uses the
+bootloader inside the `.wic`; flashing the eMMC with `uuu ... emmc_all` writes `<imx_boot>`
+separately, so only the SD card fails, but fix the copy on both paths. When no `.wic` is named
+after the board's machine, compare the two bootloaders' built-in `fdtfile`:
+```bash
+head -c 8M '<wic>' | strings | grep -m1 -E '^fdtfile='
+strings '<imx_boot>' | grep -m1 -E '^fdtfile='
+```
+If they differ (the `.wic` names another board's DTB), tell the user and ask (header:
+"Bootloader"): **Write the board's bootloader into the copy (Recommended)** | **Stop**. Then clear
+the old bootloader area of the copy (the other board's can be longer: on 6.18.37-2.1.0 the EVK's
+ends at `0x2f5027`, the FRDM-PRO's at `0x2ddc00`; nothing else lies between 32 KiB and the U-Boot
+environment at `0x700000`) and write `<imx_boot>` at the SD boot offset, never into the user's
+download:
+```bash
+W='<wic>'; B='<imx_boot>'; OFF=32    # KiB: i.MX 95, 93, 8M Nano, 8M Plus (i.MX 8M Quad/Mini: 33)
+sfdisk -d "$W" > /tmp/gmsl_pt_before.txt
+dd if=/dev/zero of="$W" bs=1k seek=$OFF count=$(( 0x700000 / 1024 - OFF )) conv=notrunc status=none
+dd if="$B" of="$W" bs=1k seek=$OFF conv=notrunc status=none
+cmp -n $(stat -c %s "$B") -i $(( OFF * 1024 )):0 "$W" "$B" && echo "bootloader written"
+sfdisk -d "$W" | diff /tmp/gmsl_pt_before.txt - && echo "partition table unchanged"; rm -f /tmp/gmsl_pt_before.txt
+```
+Both checks must print their line. Then the `.wic`'s built-in `fdtfile` is the board's (checked
+again in §Read the image step 3). Tested with 6.18.37-2.1.0 on the FRDM-IMX95-PRO (SD boot).
+
 ## Mount
 
 ```bash
 mkdir -p /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs
-LOOP=$(echo '<pw>' | sudo -S losetup -fP --show '<wic>')
+LOOP=$(SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A losetup -fP --show '<wic>')
 echo "Loop device: $LOOP"
 lsblk "$LOOP"
 ```
 Mount the boot partition (first partition, FAT) and the root filesystem (second, ext4).
 Specify the filesystem types explicitly — without `-t`, WSL2 may attempt an NFS mount and fail:
 ```bash
-echo '<pw>' | sudo -S mount -t vfat "${LOOP}p1" /tmp/gmsl_nxp_boot
-echo '<pw>' | sudo -S mount -t ext4 "${LOOP}p2" /tmp/gmsl_nxp_rootfs
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A mount -t vfat "${LOOP}p1" /tmp/gmsl_nxp_boot
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A mount -t ext4 "${LOOP}p2" /tmp/gmsl_nxp_rootfs
 ls /tmp/gmsl_nxp_boot/*.dtb /tmp/gmsl_nxp_boot/Image* 2>/dev/null | head
 ls /tmp/gmsl_nxp_rootfs/etc/os-release && cat /tmp/gmsl_nxp_rootfs/etc/os-release
 ```
@@ -152,15 +181,22 @@ Save what is read in `<tpl_dir>` (create it with `mkdir -p <tpl_dir>`) and in `<
    `lf-6.18.20-2.0.0`.
 2. **Kernel config** (common/9 needs it as `<tpl_dir>/board.config`, like `/proc/config.gz` on a
    live board): with `CONFIG_IKCONFIG` it is inside the kernel image or in `configs.ko`. Use the
-   kernel's `scripts/extract-ikconfig` (download it as data into `/tmp/gmsl_extract_ikconfig`,
-   look at it, run it with `sh`):
+   compressed config between the markers `IKCFG_ST` and `IKCFG_ED` (what the kernel's
+   `scripts/extract-ikconfig` reads); extract it directly, with no download:
    ```bash
-   curl -fsSL -o /tmp/gmsl_extract_ikconfig https://raw.githubusercontent.com/torvalds/linux/master/scripts/extract-ikconfig
-   sh /tmp/gmsl_extract_ikconfig /tmp/gmsl_nxp_boot/Image > <tpl_dir>/board.config \
-     || sh /tmp/gmsl_extract_ikconfig "$(find /tmp/gmsl_nxp_rootfs/lib/modules/<kernel_release> -name 'configs.ko*' | head -1)" > <tpl_dir>/board.config
+   python3 -I - /tmp/gmsl_nxp_boot/Image > <tpl_dir>/board.config <<'EOF'
+   import gzip, sys
+   d = open(sys.argv[1], 'rb').read()
+   i = d.find(b'IKCFG_ST'); j = d.find(b'IKCFG_ED', i)
+   if i < 0 or j < 0:
+       sys.exit('no IKCFG markers (CONFIG_IKCONFIG off, or a compressed file)')
+   sys.stdout.write(gzip.decompress(d[i + 8:j]).decode())
+   EOF
    grep -E '^CONFIG_(CC_VERSION_TEXT|MODVERSIONS|MODULE_SIG_FORCE|LOCALVERSION|I2C_ATR|VIDEO_IMX219)=' <tpl_dir>/board.config
-   rm -f /tmp/gmsl_extract_ikconfig
    ```
+   If the `Image` has no markers, run the same script on `configs.ko` from
+   `/tmp/gmsl_nxp_rootfs/lib/modules/<kernel_release>/kernel/kernel/configs.ko*` (checked on
+   6.18.37-2.1.0: identical to the kernel tree's `.config`).
    (a compressed `configs.ko.zst`/`.xz` must be decompressed into `/tmp/gmsl_configs.ko` first;
    delete it afterwards). If neither has the config, tell the user that the modules cannot be
    built for this image without the release's kernel config, and stop the build path.
@@ -171,7 +207,10 @@ Save what is read in `<tpl_dir>` (create it with `mkdir -p <tpl_dir>`) and in `<
    head -c 8M '<wic>' | strings | grep -m3 -E 'U-Boot 20[0-9.]+'
    ```
    e.g. `U-Boot 2026.04-lf_v2026.04+g6eeef838dac` (tag `lf-6.18.20-2.0.0` of
-   https://github.com/nxp-imx/uboot-imx). The two must agree; also note the default `fdtfile=`
+   https://github.com/nxp-imx/uboot-imx). The two must agree, and so must their built-in board:
+   the `fdtfile=` of `head -c 8M '<wic>' | strings` and of `strings '<imx_boot>'` must both be the
+   board's base DTB (a release can carry the same U-Boot version for several boards; otherwise
+   go back to §Unpack, "Board bootloader in the `.wic`"). Also note the default `fdtfile=`
    and `bootcmd=` of the built-in environment (`strings '<imx_boot>' | grep -E '^(fdtfile|bootcmd|bootdelay)='`).
 4. **DTB list** on the boot partition:
    ```bash
@@ -212,19 +251,21 @@ the login `root` / `analog`).
 
 1. **Hostname** `analog-imx-gmsl`:
    ```bash
-   echo '<pw>' | sudo -S sh -c 'echo analog-imx-gmsl > /tmp/gmsl_nxp_rootfs/etc/hostname'
-   echo '<pw>' | sudo -S sh -c 'grep -q "^127\.0\.1\.1" /tmp/gmsl_nxp_rootfs/etc/hosts && sed -i "s/^127\.0\.1\.1.*/127.0.1.1\tanalog-imx-gmsl/" /tmp/gmsl_nxp_rootfs/etc/hosts || printf "127.0.1.1\tanalog-imx-gmsl\n" >> /tmp/gmsl_nxp_rootfs/etc/hosts'
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo analog-imx-gmsl > /tmp/gmsl_nxp_rootfs/etc/hostname'
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'grep -q "^127\.0\.1\.1" /tmp/gmsl_nxp_rootfs/etc/hosts && sed -i "s/^127\.0\.1\.1.*/127.0.1.1\tanalog-imx-gmsl/" /tmp/gmsl_nxp_rootfs/etc/hosts || printf "127.0.1.1\tanalog-imx-gmsl\n" >> /tmp/gmsl_nxp_rootfs/etc/hosts'
    cat /tmp/gmsl_nxp_rootfs/etc/hostname
    ```
-   mDNS needs avahi on the board: check `ls /tmp/gmsl_nxp_rootfs/usr/sbin/avahi-daemon`. Without
+   mDNS needs avahi on the board: check `ls -l /tmp/gmsl_nxp_rootfs/usr/sbin/avahi-daemon` (use `ls -l`,
+   not `test -x`, for files in the mounted image: many are links to absolute paths such as
+   `/usr/bin/...`, which resolve on the host, not in the image). Without
    it, common/1 finds the board by its MAC address (NXP OUI `00:04:9F`) instead; tell the user.
 2. **Root password** `analog` (NXP images log in as `root`, often with an empty password; that may
    work on the console, but SSH and `sshpass` usually refuse it, unverified for every release, see
    common/1 §Login). Replace only the password field of root's line:
    ```bash
    HASH=$(echo 'analog' | openssl passwd -6 -stdin)
-   echo '<pw>' | sudo -S sed -i -E "s#^root:[^:]*:#root:${HASH}:#" /tmp/gmsl_nxp_rootfs/etc/shadow
-   echo '<pw>' | sudo -S grep -c '^root:\$6\$' /tmp/gmsl_nxp_rootfs/etc/shadow
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sed -i -E "s#^root:[^:]*:#root:${HASH}:#" /tmp/gmsl_nxp_rootfs/etc/shadow
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A grep -c '^root:\$6\$' /tmp/gmsl_nxp_rootfs/etc/shadow
    ```
    The last command must print `1`. (`#` as the sed separator: the hash contains `/` but never
    `#`.) If the image has no `/etc/shadow` (password in `/etc/passwd`), tell the user and stop:
@@ -232,7 +273,7 @@ the login `root` / `analog`).
 3. **SSH root login with a password**: find the SSH server of the image:
    ```bash
    ls /tmp/gmsl_nxp_rootfs/usr/sbin/sshd /tmp/gmsl_nxp_rootfs/usr/sbin/dropbear 2>/dev/null
-   grep -nE '^[[:space:]]*(PermitRootLogin|PasswordAuthentication|Include)' /tmp/gmsl_nxp_rootfs/etc/ssh/sshd_config 2>/dev/null
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A grep -nE '^[[:space:]]*(PermitRootLogin|PasswordAuthentication|Include)' /tmp/gmsl_nxp_rootfs/etc/ssh/sshd_config 2>/dev/null
    cat /tmp/gmsl_nxp_rootfs/etc/default/dropbear 2>/dev/null
    ```
    - OpenSSH: root needs `PermitRootLogin yes` (the default `prohibit-password` refuses passwords)
@@ -241,7 +282,7 @@ the login `root` / `analog`).
      into `sudo -S tee` ends up empty, because the password pipe consumes stdin):
      ```bash
      printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' > /tmp/gmsl_sshd.conf
-     echo '<pw>' | sudo -S sh -c 'mkdir -p /tmp/gmsl_nxp_rootfs/etc/ssh/sshd_config.d && cp /tmp/gmsl_sshd.conf /tmp/gmsl_nxp_rootfs/etc/ssh/sshd_config.d/10-gmsl.conf'
+     SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'mkdir -p /tmp/gmsl_nxp_rootfs/etc/ssh/sshd_config.d && cp /tmp/gmsl_sshd.conf /tmp/gmsl_nxp_rootfs/etc/ssh/sshd_config.d/10-gmsl.conf'
      rm -f /tmp/gmsl_sshd.conf
      ```
      Otherwise change the existing lines in `sshd_config` with `sudo sed -i` (or append them if
@@ -272,9 +313,9 @@ orchestrator's §Cleanup:
 ```bash
 sync
 for m in /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs; do
-  mountpoint -q "$m" && echo '<pw>' | sudo -S umount "$m"
+  mountpoint -q "$m" && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A umount "$m"
 done
-for l in $(losetup -nO NAME -j '<wic>'); do echo '<pw>' | sudo -S losetup -d "$l"; done
+for l in $(losetup -nO NAME -j '<wic>'); do SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A losetup -d "$l"; done
 rmdir /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs 2>/dev/null
 losetup -j '<wic>'
 ```

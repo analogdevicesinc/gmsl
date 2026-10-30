@@ -14,33 +14,40 @@ First close any stale socket and remove the socket file, then open a new one:
 ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip> 2>/dev/null
 rm -f /tmp/gmsl_ssh_sock
 sleep 0.5
-sshpass -p '<pw>' ssh -M -S /tmp/gmsl_ssh_sock -fN \
-  -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+sshpass -f /tmp/gmsl_pw_board ssh -M -S /tmp/gmsl_ssh_sock -fN \
+  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
   -o ServerAliveInterval=15 -o ServerAliveCountMax=3 <user>@<ip>
 ssh -S /tmp/gmsl_ssh_sock -O check <user>@<ip>
 ```
 The check must print `Master running`. If it does not, open the socket again (all the
 commands above), up to 3 times, 5 seconds apart.
 
-Do not hide SSH's error output (no `2>/dev/null`) on the connection commands. If SSH reports
-`REMOTE HOST IDENTIFICATION HAS CHANGED`, the board's SD card or eMMC was most likely reflashed:
-tell the user, run `ssh-keygen -R <ip>`, and connect again.
+Do not hide SSH's error output (no `2>/dev/null`) on the connection commands. The host key is not
+stored (`UserKnownHostsFile=/dev/null`), so a reflashed board (new host key) connects without a
+`REMOTE HOST IDENTIFICATION HAS CHANGED` error; if another command reports it, run
+`ssh-keygen -R <ip>` and connect again.
 If the connection fails for any other reason, use AskUserQuestion to ask the user to retry,
 change the IP, or stop. If the user stops, run the orchestrator's §Cleanup.
 
 From then on, every command on the board goes through the socket:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "<cmd>"
-scp -o ControlPath=/tmp/gmsl_ssh_sock <file> <user>@<ip>:<path>
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "<cmd>"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <file> <user>@<ip>:<path>
 ```
-- If a command through the control socket prints `Control socket connect(...)`, stop and open the
-  socket again (this section) before running anything else. Without the socket, ssh falls back to
-  a password login that fails, and recent OpenSSH versions then refuse connections from the host
-  for a while (`penalty: failed authentication` on the board); if connections are reset, wait
-  30 seconds before trying again.
-- Sudo commands on the board: `echo '<pw>' | sudo -S sh -c '<cmd>'`. Logged in as `root`
+- `BatchMode=yes` makes a command fail at once when the socket is gone (no password prompt, no
+  `Host key verification failed` from a fallback connection). If a command prints
+  `Control socket connect(...)`, `Permission denied` or `Host key verification failed`, stop and
+  open the socket again (this section) before running anything else. Recent OpenSSH versions
+  refuse connections for a while after failed logins (`penalty: failed authentication` on the
+  board); if connections are reset, wait 30 seconds before trying again.
+- Sudo commands on the board: `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'`. Logged in as `root`
   (common on NXP images, which may not have `sudo` at all): run `sh -c '<cmd>'` without the sudo
-  part.
+  part. Not root: the board password and the helper are on the board from common/2 (§Run the
+  assessment); put them back after every reboot (the board's `/tmp` is empty then), and delete
+  them in the orchestrator's §Cleanup step 3 with the board's `/tmp/gmsl_*`:
+  ```bash
+  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "umask 077; cat > /tmp/gmsl_pw_board; printf '#!/bin/sh\ncat /tmp/gmsl_pw_board\n' > /tmp/gmsl_askpass; chmod 700 /tmp/gmsl_askpass" < /tmp/gmsl_pw_board
+  ```
 
 ## Reboot
 
@@ -51,18 +58,20 @@ runtime overlay of generic/1 §Install device tree), skip the reboot and go dire
 First read the board's current boot ID (`<boot_id>`), a random value the kernel creates at every
 boot, to tell the rebooted board apart from the old session later:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "cat /proc/sys/kernel/random/boot_id"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cat /proc/sys/kernel/random/boot_id"
 ```
 
 Then reboot (as `root`: `reboot` without the sudo part):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S reboot"
-ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip> 2>/dev/null
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A reboot"
+ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip> 2>/dev/null; rm -f /tmp/gmsl_ssh_sock
 ```
+(The board's `/tmp` is empty after the reboot: put the password helper back (§Control socket) when
+the login is not root.)
 
 Then sleep 30, poll with:
 ```bash
-sshpass -p '<pw>' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 <user>@<ip> cat /proc/sys/kernel/random/boot_id
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 <user>@<ip> cat /proc/sys/kernel/random/boot_id
 ```
 every 5 seconds until it succeeds and prints a boot ID different from `<boot_id>` (max 40
 attempts). A board that is slow to shut down can still answer with the old boot ID after the
@@ -84,12 +93,12 @@ attempts, 5 seconds apart), and wait 30 seconds before a last attempt.
 
 Check that the devices probed:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "ls /dev/v4l-subdev* /dev/video* /dev/media*"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "ls /dev/v4l-subdev* /dev/video* /dev/media*"
 ```
 Also check the kernel log of this boot for the GMSL drivers (as a normal user, `dmesg` may need
 sudo):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S -p '' dmesg | grep -iE 'max9|max-serdes|max_serdes|<sensor>' | tail -20"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A dmesg | grep -iE 'max9|max-serdes|max_serdes|<sensor>' | tail -20"
 ```
 - `v4l-subdev*` nodes for the deserializer, the serializers and the sensors, and a media device:
   continue with the platform file.
@@ -105,7 +114,7 @@ For any other failure, see the orchestrator's §Troubleshooting and the platform
 
 If no `v4l-subdev*` nodes are listed, check the camera port:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S -p '' dmesg | grep -E '<deserializer_driver> .*(-121|probe)' | tail -3; i2cdetect -y -r <camera_i2c_bus>"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A dmesg | grep -E '<deserializer_driver> .*(-121|probe)' | tail -3; i2cdetect -y -r <camera_i2c_bus>"
 ```
 (`<camera_i2c_bus>`: the bus number of common/3 §I2C probe, or the one in the platform file's
 **Troubleshooting**; `i2cdetect` is in the `i2c-tools` package; as a normal user, run it with

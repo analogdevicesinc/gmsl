@@ -87,7 +87,7 @@ the board and how to undo it. Nothing is removed from the board: it is left in i
 | Board | Live board | Build/flash | Viewer |
 |-------|-----------|-------------|--------|
 | Raspberry Pi 4/5 Model B | ADI GMSL images, or other Raspberry Pi OS images | SD card: Raspberry Pi OS with a kernel built from the Raspberry Pi tree plus the ADI GMSL drivers | qv4l2, GStreamer as the fallback |
-| NXP i.MX with the NXP BSP | ADI modules built against NXP's kernel source and installed in `updates/gmsl/`, merged GMSL DTB, U-Boot `fdtfile` setting | Your NXP release image (downloaded from nxp.com) with the same changes, written to an SD card or to the eMMC with `uuu` | GStreamer |
+| NXP i.MX with the NXP BSP: FRDM-IMX95-PRO, i.MX93 11x11 EVK (other i.MX boards: best effort) | ADI modules built against NXP's kernel source and installed in `updates/gmsl/`, merged GMSL DTB, U-Boot `fdtfile` setting | Your NXP release image (downloaded from nxp.com) with the same changes, written to an SD card or to the eMMC with `uuu` | GStreamer |
 | Other Linux boards | Best effort: assessment, driver build/port against the board's kernel where possible, device tree glue from the board's own device tree; an artifacts package when something cannot be done | — | GStreamer |
 
 Booting an NXP board from an SD card needs hardware changes on the board (boot-mode switches,
@@ -139,10 +139,11 @@ GMSL chips and cameras:
 
 **Run Claude Code in manual mode** (the default permission mode, where you approve each command)
 for any run that uses `sudo`: the build/flash paths, building drivers for a board's kernel, and
-installing missing host tools. The skill passes your sudo password to `sudo -S`, and in auto mode
-Claude Code's safety checks block those commands, so the run stops at the first `sudo` step.
-Switch modes with Shift+Tab before starting (or when the skill asks for the sudo password). A
-board that already has the ADI drivers needs no host `sudo`.
+installing missing host tools. The skill writes your sudo password once to a private file and runs 
+`sudo -A` with a small helper that reads it, so the password never appears in a command or a log. 
+Both files are deleted at the end of the run. In auto mode Claude Code's safety checks block these 
+commands, so the run stops at the first `sudo` step. Switch modes with Shift+Tab before starting 
+(or when the skill asks for the sudo password).
 
 ## Folder Overview
 
@@ -153,11 +154,11 @@ skills/
 │
 ├── common/
 │   │
-│   ├── 0-host.md                                   host OS (Windows/WSL/Linux), host tools, sudo password, usbipd
+│   ├── 0-host.md                                   host OS (Windows/WSL/Linux), host tools, sudo password file, wsl --mount check, usbipd
 │   │
 │   ├── 1-find-board.md                             mDNS + MAC address search, default logins, manual IP/credentials
 │   │
-│   ├── 2-identify-board.md                         assess.sh, running device tree, kernel config, DTBs, platform choice
+│   ├── 2-identify-board.md                         board sudo helper, assess.sh, running device tree, kernel config, DTBs, platform choice
 │   │
 │   ├── 3-camera-questions.md                       deserializer/serializer/sensor, EV kit checks, I2C probe, path check, driver check
 │   │
@@ -169,19 +170,23 @@ skills/
 │   │
 │   ├── 7-media-pipeline.md                         media-ctl routes and formats, media_cfg.sh
 │   │
-│   ├── 8-frames-viewer.md                          frame check, desktop detection, qv4l2, GStreamer
+│   ├── 8-frames-viewer.md                          frame check, content check, colour-bar test, desktop detection, qv4l2, GStreamer
 │   │
-│   ├── 9-vendor-modules.md                         ADI modules built out of tree against a vendor kernel
+│   ├── 9-vendor-modules.md                         ADI modules built out of tree against a vendor kernel, pixel mode
 │   │
 │   ├── 10-uboot-env.md                             U-Boot envtools, environment CRC search, fw_setenv, offline env image
 │   │
 │   ├── 11-sd-card.md                               SD card detect, confirm, write, release
 │   │
-│   └── assess.sh, i2cburst.c, i2c_retry_regmap.h   helpers
+│   ├── assess.sh, i2cburst.c, i2c_retry_regmap.h   helpers
+│   │
+│   └── patches/                                    local ADI driver patch
 │
 ├── rpi/                                            Raspberry Pi: kernel source, ADI drivers, kernel build, image, camera setup
 │
 ├── nxp/                                            NXP i.MX: base image, kernel modules, device tree, U-Boot env, flash, camera setups
+│   │
+│   └── patches/                                    i.MX93 receiver patch
 │
 └── generic/                                        other boards: assessment, camera setup, artifacts
 ```

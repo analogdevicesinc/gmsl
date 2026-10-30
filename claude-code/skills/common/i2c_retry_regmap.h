@@ -34,14 +34,29 @@
 
 static unsigned int i2c_retry_recovered __maybe_unused;
 
+#define I2C_RETRY_SAVE_LEN	4
+
 static int __maybe_unused i2c_retry_transfer(struct i2c_adapter *adapter,
 					     struct i2c_msg *msgs, int num)
 {
 	unsigned int reg = msgs[0].len >= 2 ? (msgs[0].buf[0] << 8) | msgs[0].buf[1] : 0;
+	/*
+	 * A failed transfer may already have stored read data in a buffer that is also
+	 * sent (max_ser_read_reg() reads into its register address buffer): keep the
+	 * bytes of the first write message and put them back before each retry.
+	 */
+	bool save = num >= 1 && !(msgs[0].flags & I2C_M_RD) &&
+		    msgs[0].len <= I2C_RETRY_SAVE_LEN;
+	u8 saved[I2C_RETRY_SAVE_LEN];
 	unsigned int i;
 	int ret;
 
+	if (save)
+		memcpy(saved, msgs[0].buf, msgs[0].len);
+
 	for (i = 0; ; i++) {
+		if (i && save)
+			memcpy(msgs[0].buf, saved, msgs[0].len);
 		ret = i2c_transfer(adapter, msgs, num);
 		if (ret == num) {
 			if (i) {

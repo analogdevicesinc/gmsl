@@ -25,7 +25,7 @@ Follow §Flow, using AskUserQuestion to prompt the user interactively.
 | `platform` | Boards | Selected by (common/2 §Platform selection, from `/proc/device-tree/model` (M) and `compatible` (C)) | Live-board entry | Build/flash path | Hostname to look for | Network card OUIs | Viewer |
 |------------|--------|---------------|------------------|------------------|----------------------|-------------------|--------|
 | `rpi` | Raspberry Pi 5 Model B, Raspberry Pi 4 Model B | M contains `Raspberry Pi 5 Model` or `Raspberry Pi 4 Model` (CM4/CM5 and Pi 400/500 are `generic`) | rpi/4 | rpi/0 → rpi/1 → rpi/2 → rpi/3 (SD card: Raspberry Pi OS with the ADI GMSL kernel) | `analog-rpi-gmsl` (ADI images and cards prepared by rpi/3) | `88:A2:9E`, `2C:CF:67`, `D8:3A:DD`, `DC:A6:32`, `E4:5F:01`, `28:CD:C1`, `B8:27:EB` | qv4l2 first, GStreamer as the fallback (rpi/4 §Viewer) |
-| `nxp` | NXP i.MX boards running the NXP BSP (FRDM-IMX95-PRO tested; other i.MX boards best effort) | C contains `fsl,imx` and the kernel is an NXP `lf-*` release (git hash of an `lf-*` tag of `nxp-imx/linux-imx`, or U-Boot version containing `lf_v`) | nxp/5 | nxp/0 → nxp/1 → nxp/2 → nxp/3 → nxp/4 (the user's NXP release image with ADI modules, GMSL DTB and U-Boot setting; SD card or eMMC) | `expected_hostname` (`analog-imx-gmsl`, set by nxp/0), the NXP Yocto default `imx95-19x19-lpddr5-frdm-pro` (FRDM-IMX95-PRO; other boards: their Yocto `MACHINE` name) | `00:04:9F` | GStreamer (nxp/5 §Viewer) |
+| `nxp` | NXP i.MX boards running the NXP BSP (FRDM-IMX95-PRO, i.MX93 11x11 EVK; other i.MX boards best effort) | C contains `fsl,imx` and the kernel is an NXP `lf-*` release (git hash of an `lf-*` tag of `nxp-imx/linux-imx`, or U-Boot version containing `lf_v`) | nxp/5 | nxp/0 → nxp/1 → nxp/2 → nxp/3 → nxp/4 (the user's NXP release image with ADI modules, GMSL DTB and U-Boot setting; SD card or eMMC) | `expected_hostname` (`analog-imx-gmsl`, set by nxp/0), the NXP Yocto default `imx95-19x19-lpddr5-frdm-pro` (FRDM-IMX95-PRO; other boards: their Yocto `MACHINE` name) | `00:04:9F` | GStreamer (nxp/5 §Viewer) |
 | `generic` | Any other Linux board (other SoCs, custom boards, other Raspberry Pi models, i.MX on a mainline kernel) | Everything else | generic/0 → generic/1 → generic/2 | None: the board must run its own image | — (ask for the IP address) | — | GStreamer (common/8 §GStreamer) |
 
 The ADI images and the RPi cards prepared by rpi/3 use the login `analog` / `analog`; NXP media
@@ -49,7 +49,7 @@ Used in all the files:
   running device tree and the board's kernel config and DTBs (the templates of different
   platforms have the same file names but different contents, so they must not share a folder).
 - `<ip>`, `<user>`, `<pw>`: the board's address and login (state `board_ip`, `board_user`,
-  `board_pw`). The host's sudo password is `sudo_password` in the state; files say which one a
+  `board_pw`). The host's sudo password is only in `/tmp/gmsl_pw_sudo`, the board's also in `/tmp/gmsl_pw_board` (common/1), both used through files, never typed into a command; files say which one a
   command uses.
 - `<board_home>`: the login's home folder on the board (state `board_home`, from `echo $HOME`;
   `/root` for root on NXP images). In remote commands use `~` or `$HOME`; never `/home/<user>`.
@@ -93,7 +93,7 @@ Keys (each file says which it reads and writes):
 | Key | Written by | Meaning |
 |-----|------------|---------|
 | `host` | common/0 §Host OS | `wsl`, `linux` or `windows` |
-| `sudo_password` | common/0 §Sudo password | Host sudo password (empty = passwordless); build/flash paths only |
+| `sudo_pw_file` | common/0 §Sudo password | `/tmp/gmsl_pw_sudo` or `passwordless`: the host sudo password is only in that file (never in the state or a command); build/flash paths only |
 | `verbosity`, `run_dir`, `log` | §Flow (first question), §Verbose mode | `quiet` or `verbose`; with `verbose`, the run folder `<run_dir>` in the current folder and the log file `<log>` = `<run_dir>/adi_gmsl_agent_log.txt` |
 | `run_started` | §Flow (Step 1) | Unix time the run started; §Cleanup removes only `/tmp/gmsl_*` files newer than it |
 | `entry` | §Flow | `network` (Q1 Yes) or `prepare` (Q1 No) |
@@ -101,7 +101,7 @@ Keys (each file says which it reads and writes):
 | `flash_requested` | §Flow (Step 2) | `True` when the prompt asked to flash or build (a board on the network is never flashed; the skill then says why flashing is skipped) |
 | `target_platform` | §Flow (Q2) | `rpi` or `nxp`: the board being prepared |
 | `rpi_model` | §Flow (No path: Raspberry Pi model), common/2 | `5` or `4` (the cam.py profile prefix is `rpi<rpi_model>`: `rpi5`, `rpi4`; rpi/4 §Profile) |
-| `nxp_board`, `nxp_model` | §Flow (Q2/Q3), common/2, nxp/0 | `nxp_board`: normalized, `FRDM-IMX95-PRO` or `other-imx`; `nxp_model`: for `other-imx`, the board the user named or the model string M |
+| `nxp_board`, `nxp_model` | §Flow (Q2/Q3), common/2, nxp/0 | `nxp_board`: normalized, `FRDM-IMX95-PRO`, `IMX93-11X11-EVK` or `other-imx`; `nxp_model`: for `other-imx`, the board the user named or the model string M |
 | `flash_medium` | §Flow (Q3) | `sd` or `emmc` |
 | `nxp_image_path` | §Flow (Q4) | The NXP release file the user downloaded (never deleted) |
 | `work_dir`, `work_dir_created`, `work_dir_preexisting` | §Flow (Step 1), common/0 §Host tools | Default `~/gmsl-camera-work` (absolute path); `True` when this run creates the folder; the folder's top-level entries when it already existed (§Cleanup deletes only what this run added) |
@@ -109,6 +109,7 @@ Keys (each file says which it reads and writes):
 | `artifacts_written` | generic/2 §Artifacts package | The generic artifacts package was written (its path) |
 | `kernel_src_path`, `kernel_branch`, `adi_gmsl_branch`, `adi_base_branch` | rpi/0, rpi/1; nxp/1, common/9 | Kernel tree and branches |
 | `kernel_release`, `localversion`, `toolchain_prefix` | rpi/2; nxp/1, common/9 | Release string, `LOCALVERSION`, cross-compiler prefix |
+| `nxp_debug_kernel`, `debug_kernel_release` | nxp/1 §Image, §Debug kernel | NXP build path: `True` (default) when NXP's kernel is replaced by the debug kernel (`Image-gmsl-debug`), and its release name |
 | `drivers_added`, `kernel_built`, `modules_built` | rpi/1, rpi/2; nxp/1, common/9 | Build progress |
 | `gmsl_dtb_name` | nxp/2, common/4 §Merged DTB | File name of the merged GMSL DTB |
 | `env_written` | nxp/3, common/10 | U-Boot `fdtfile` changed (live) or env image written (offline) |
@@ -256,7 +257,7 @@ image you download from nxp.com. The board is asked next.") | **Other** (descrip
 build/flash path: the board must run its own image."). Skip it when the family is clear from the
 prompt. Store `target_platform` (`rpi` or `nxp`). The **model** is asked in the family's first
 step below, the same way for both families (skip it when the prompt names the model): Raspberry
-Pi → `rpi_model` (`5` or `4`); NXP → `nxp_board` (normalized: `FRDM-IMX95-PRO`, or `other-imx`
+Pi → `rpi_model` (`5` or `4`); NXP → `nxp_board` (normalized: `FRDM-IMX95-PRO`, `IMX93-11X11-EVK`, or `other-imx`
 with the board the user named in `nxp_model`).
 
 On native Windows, stop here: tell the user that preparing a board needs WSL or Linux, and
@@ -283,8 +284,8 @@ display common/0 §WSL installation instructions.
 **NXP i.MX** (`target_platform` = `nxp`):
 1. **NXP board and Q3 — flash medium**, the medium every time. Use AskUserQuestion with 1–2
    questions:
-   - **NXP board** (header: "NXP board"), only if unknown: "Which NXP board?" **FRDM-IMX95-PRO**
-     (tested) | **Other i.MX board** (best effort; the user names it in "Other").
+   - **NXP board** (header: "NXP board"), only if unknown: "Which NXP board?" **FRDM-IMX95-PRO** |
+     **i.MX93 11x11 EVK** | **Other i.MX board** (best effort; the user names it in "Other").
    - **Flash medium** (header: "Medium"): "Where should the image be written?"
      - **SD card** (description: "Booting from SD needs hardware changes on the board: the
        boot-mode switches must be set to SD boot (FRDM-IMX95-PRO: SW4) and anything else the
@@ -294,7 +295,7 @@ display common/0 §WSL installation instructions.
        serial-download setting of the boot-mode switches and a USB-C cable from the board's
        download port to this PC during flashing, then the switches set back to eMMC boot.
        Replaces the eMMC's current contents.")
-   Store `flash_medium` (`sd` or `emmc`) and `nxp_board` (`FRDM-IMX95-PRO`, or `other-imx` plus
+   Store `flash_medium` (`sd` or `emmc`) and `nxp_board` (`FRDM-IMX95-PRO`, `IMX93-11X11-EVK`, or `other-imx` plus
    the named board in `nxp_model`).
 
    **Hardware notice** (shown now and again before flashing, nxp/4 §Hardware notice). For SD,
@@ -302,7 +303,8 @@ display common/0 §WSL installation instructions.
    boots from the SD card after the boot-mode switches are changed to SD boot (FRDM-IMX95-PRO:
    SW4, positions from NXP's getting-started guide for the board; other boards: the board's
    manual, plus any other change it lists), that the eMMC is not used while they are in that
-   position, and that setting the switches back returns to eMMC boot. Options: **I will change the
+   position, and that setting the switches back returns to eMMC boot. Options: **The switches are already on SD boot** (description:
+   "The board was set to SD boot before") | **I will change the
    boot switches (Recommended)** | **Use the eMMC instead** (switch to eMMC) | **Stop**. For the
    eMMC, tell the user that flashing needs the serial-download switch setting (from the board's
    quick start guide) and a USB-C cable to this PC, and that nxp/4 walks them through it.
@@ -344,6 +346,10 @@ drivers against the board's kernel when its source is public). Ask (header: "Boa
   §Logging rules and §What to save, and the run always ends with §Verbose mode §Package (also
   when it fails or the user stops it). Never write a password into `<run_dir>`. Non-verbose runs
   create no run folder and no log.
+- **Permission mode for sudo:** every host `sudo` step (build/flash paths, Build mode, installing
+  host tools) needs Claude Code's manual mode or a permission rule; auto mode refuses them
+  (common/0 §Sudo password). Say so before the first sudo step, and when a command is refused,
+  stop and ask the user to switch.
 - Always read a file before following it; follow the files in the order §Flow gives. Each file
   updates the state when it completes.
 - If a step fails and its file gives no way forward, stop, report the error, and run §Cleanup
@@ -352,12 +358,12 @@ drivers against the board's kernel when its source is public). Ask (header: "Boa
 - The host's sudo password is collected once (common/0 §Sudo password), only on the build/flash
   paths, in Build mode and to install missing host tools (common/0 §Quick tool check), and reused
   from the state. All local sudo commands use
-  `echo '<pw>' | sudo -S sh -c '<cmd>'` (passwordless: `sudo <cmd>`).
+  `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'` (passwordless: `sudo <cmd>`).
 - Use sshpass for SSH logins. One control socket per run, `/tmp/gmsl_ssh_sock` (common/5
-  §Control socket); all commands through it use `ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "<cmd>"`.
+  §Control socket); all commands through it use `ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "<cmd>"`.
   If a command through the socket prints `Control socket connect(...)`, stop and open the socket
   again before running anything else (common/5 §Control socket).
-- All sudo commands on the board use `echo '<pw>' | sudo -S sh -c '<cmd>'`; logged in as `root`,
+- All sudo commands on the board use `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'`; logged in as `root`,
   run the command directly (NXP images may have no `sudo`).
 - The board's home folder is `~` / `$HOME` / `<board_home>`, never `/home/<user>` (root's home is
   `/root` on NXP images).
@@ -379,6 +385,14 @@ drivers against the board's kernel when its source is public). Ask (header: "Boa
   what a file explicitly asks for (for example the U-Boot environment backup of common/10).
   Scratch files in the board's `/tmp` are named `/tmp/gmsl_*` and deleted right after use;
   password-bearing files are never left there.
+- **Registers and kernel state on the board:** no `/dev/mem` access (`devmem`, `busybox devmem`,
+  Python `mmap` of `/dev/mem`) without the user's consent, and never a register **write** through
+  it: it bypasses the drivers, and a write during streaming on the i.MX93 produced 730,000 receiver
+  error events. Reads only inside a documented register block of a device that is powered and
+  streaming (a runtime-suspended block reads back nothing useful); a `SIGBUS` means stop. Prefer
+  the kernel's own dumps: `v4l2-ctl -d <subdev> --log-status`, dynamic debug of the receiver
+  driver on a debug kernel, and debugfs (for example the ISI's `/sys/kernel/debug/<isi>/`). Never
+  run `dmesg -C` (it deletes evidence): mark a point with `dmesg | wc -l` or use `dmesg --since`.
 - Hardware is changed only by the user: never change jumpers, switches or CFG levels yourself.
   Tell the user what to change and why, and continue after they confirm. The EV kits' µC jumpers
   (`RX_SDA`/`TX_SCL`, J18/J19) stay fitted (common/3 §EV kit checks); the camera I2C bus runs at
@@ -467,7 +481,8 @@ In addition to the log (read-only commands on the board; a failing command is no
 - After common/3 (the hardware answers): `<run_dir>/choices.json` with platform, board model,
   kernel release, deserializer, camera count, connector, adapter PHY, serializer and sensor per
   camera, board address and user name, `scope`, `entry`, and which values were detected
-  automatically (no password). Rewrite it if the answers change.
+  automatically (no password). Rewrite it when an answer changes and when a value is detected
+  later (kernel release, board address, login user): no `null` for a value the run knows.
 - After common/2: `assess_report.txt`, `running.dts`, `board.config` and the DTB list into
   `<run_dir>/board/`.
 - After each reboot (common/5 §Probe check), into `<run_dir>/board/` with a numbered suffix:
@@ -496,7 +511,7 @@ Run it as the **last** step of §Cleanup (also when the run stops early):
    on the host: `/tmp/gen_gmsl_dts` (templates, JSON, overlay, DTBO, glue) into
    `<run_dir>/gen_gmsl_dts/`, the merged DTB, `/tmp/gmsl_*` scratch files of this run (newer than `run_started`, §Cleanup
    step 6) except the state file and the control socket into `<run_dir>/host/`, a copy of the state file without the password
-   keys (`sudo_password`, `board_pw`) as `<run_dir>/host/state.json`, and copies of any backup the
+   key `board_pw` as `<run_dir>/host/state.json`, and copies of any backup the
    run made (U-Boot environment backup). Never copy kernel trees, toolchains or images.
 2. After the other §Cleanup steps, append the final summary to the log:
    ```bash
@@ -514,26 +529,42 @@ Run it as the **last** step of §Cleanup (also when the run stops early):
    If the transcript was not found, tell the user to export it with `/export` and keep it with
    the ZIP.
 4. Remove every password used in the run from every file of the run folder (the board password
-   unless it is the default `analog`, the host's sudo password, a root password set in an image),
-   including their JSON-escaped forms in the transcript:
+   unless it is the default `analog`, the host's sudo password, a root password set in an image).
+   The script reads them from the password files (`/tmp/gmsl_pw_sudo`, `/tmp/gmsl_pw_board`, and
+   any other `/tmp/gmsl_pw_*` the run wrote): never type a password, or part of one, into this or
+   any other command. It replaces the raw, JSON-escaped and shell-quoted forms, then counts what is
+   left, including pieces of 5 or more characters, and prints only counts and file names:
    ```bash
-   GMSL_PWS='<password 1>' GMSL_PWS2='<password 2>' python3 -I - <run_dir> <<'EOF'
-   import json, os, sys
-   pws = [p for p in (os.environ.get("GMSL_PWS"), os.environ.get("GMSL_PWS2")) if p]
-   forms = {f for p in pws for f in (p.encode(), json.dumps(p)[1:-1].encode())}
-   for root, _, files in os.walk(sys.argv[1]):
-       for name in files:
-           path = os.path.join(root, name)
-           data = open(path, "rb").read()
-           new = data
-           for form in forms:
-               new = new.replace(form, b"****")
-           if new != data:
-               open(path, "wb").write(new)
+   python3 -I - <run_dir> <<'EOF'
+   import glob, json, os, sys
+   pws = []
+   for f in sorted(glob.glob('/tmp/gmsl_pw_*')):
+       p = open(f).read().splitlines()[0] if os.path.getsize(f) else ''
+       if p and p != 'analog':
+           pws.append(p)
+   forms = set()
+   for p in pws:
+       for v in (p, json.dumps(p)[1:-1], p.replace("'", "'\\''"), json.dumps(p.replace("'", "'\\''"))[1:-1]):
+           forms.add(v.encode())
+   files = [os.path.join(r, n) for r, _, ns in os.walk(sys.argv[1]) for n in ns]
+   for path in files:
+       data = open(path, 'rb').read(); new = data
+       for form in sorted(forms, key=len, reverse=True):
+           new = new.replace(form, b'****')
+       if new != data:
+           open(path, 'wb').write(new)
+   for i, p in enumerate(pws, 1):
+       pieces = {p[a:b].encode() for a in range(len(p)) for b in range(a + 5, len(p) + 1)} if len(p) >= 5 else {p.encode()}
+       hits = {path: sum(open(path, 'rb').read().count(x) for x in pieces) for path in files}
+       hits = {k: v for k, v in hits.items() if v}
+       print(f'password {i} ({len(p)} chars): {sum(hits.values())} remaining piece matches', *sorted(hits), sep='\n  ')
    EOF
    ```
-   (Add one environment variable per password; skip a password that is empty or too short to
-   replace safely, and log `NOTE: password of <n> characters not scrubbed`.)
+   Every password must show `0 remaining piece matches`. Otherwise tell the user how many and in
+   which files (never the text), and ask whether to replace those pieces too (they can be common
+   words or parts of paths, for example a password that equals the user name) or to keep the
+   folder for manual review. A password shorter than 5 characters is replaced only as a whole: log
+   `NOTE: password of <n> characters, pieces not checked`.
 5. Create the ZIP next to the run folder, check it, and delete the folder only if the check
    passed:
    ```bash
@@ -545,8 +576,11 @@ Run it as the **last** step of §Cleanup (also when the run stops early):
    ```
    The last command must print nothing. If the ZIP could not be created or checked, keep the
    folder and tell the user where it is.
-6. Tell the user the full path of `<run_dir>.zip` and that it contains everything recorded
-   during the run (in the final message).
+6. Delete the password files: `rm -f /tmp/gmsl_pw_* /tmp/gmsl_askpass`, and check with
+   `ls /tmp/gmsl_pw_* /tmp/gmsl_askpass 2>/dev/null` (must print nothing). Tell the user the full
+   path of `<run_dir>.zip` and that it contains everything recorded during the run (in the final
+   message), and that the Claude Code session history in `~/.claude/projects/` still contains
+   anything typed in the chat.
 
 ## Cleanup
 
@@ -562,14 +596,14 @@ run this procedure but keep the modified image (its path is the one that step na
 image is, that they can flash it manually, and to delete it once they have flashed it.
 
 Read the state first and keep the values for the whole procedure (the state file is deleted
-last): `sudo_password`, `run_started`, `work_dir`, `kernel_src_path`, `sd_type`, `sd_busid`, `sd_disk_number`,
+last): `sudo_pw_file`, `run_started`, `work_dir`, `kernel_src_path`, `sd_type`, `sd_busid`, `sd_disk_number`,
 `board_ip`, `board_user`, `board_pw`, `nxp_image_path`, `platform`, `work_dir_created`,
 `work_dir_preexisting`, `uuu_win_dir`, `artifacts_written`, and what §Final message needs
 (`entry`, `hw`, `gmsl_dtb_name`, `env_written`, `dt_installed`, `uuu_udev_rule`, ...). If the sudo password is not in the
 state, sudo commands are only needed when step 1 finds a mount or a loop device, or when a plain
 `rm -rf` reports `Permission denied`: then ask for it (common/0 §Sudo password). Below, `<pw>` is
 the sudo password (passwordless: plain `sudo`). Deletions always use plain `rm -rf` first and
-repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permission denied`.
+repeat with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...` only for what reported `Permission denied`.
 
 0. **Keep what the user needs.** With `verbosity` = `verbose`, first run §Verbose mode §Package
    step 1 (copy the run's files into `<run_dir>`). Before anything in `/tmp` is deleted: on a `generic` board, run
@@ -582,10 +616,10 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
 1. **Unmount the image partitions and detach their loop devices** (rpi/3, nxp/0):
    ```bash
    for m in /tmp/gmsl_rpi_boot /tmp/gmsl_rpi_rootfs /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs; do
-     mountpoint -q "$m" && echo '<pw>' | sudo -S umount "$m"
+     mountpoint -q "$m" && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A umount "$m"
    done
    losetup -nO NAME,BACK-FILE | while read l f; do
-     case "$f" in <work_dir>/*|/tmp/gmsl_*) echo '<pw>' | sudo -S losetup -d "$l";; esac
+     case "$f" in <work_dir>/*|/tmp/gmsl_*) SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A losetup -d "$l";; esac
    done
    for m in /tmp/gmsl_rpi_boot /tmp/gmsl_rpi_rootfs /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs; do
      mountpoint -q "$m" && echo "STILL MOUNTED: $m"
@@ -609,12 +643,14 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
 3. **Close the control socket**, after deleting the skill's own scratch files in the board's
    `/tmp` if the socket is still open and the board answers (assessment script, copied DTBOs,
    test captures, password-bearing helper files; the files of `~/Workspace` and the installed
-   modules/DTB/boot setting stay — §Final message):
+   modules/DTB/boot setting stay — §Final message). The viewer's log `/tmp/gmsl_gst_view.log`
+   stays while the viewer runs (it writes to it; with `verbosity` = `verbose`, §Verbose mode §What
+   to save copies it first); the final message names it:
    ```bash
-   [ -S /tmp/gmsl_ssh_sock ] && ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "rm -f /tmp/gmsl_* /tmp/gmsl.dtbo /tmp/extlinux.conf.new"
+   [ -S /tmp/gmsl_ssh_sock ] && ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /tmp -maxdepth 1 -name 'gmsl_*' ! -name gmsl_gst_view.log -exec rm -f {} +; rm -f /tmp/gmsl.dtbo /tmp/extlinux.conf.new"
    [ -S /tmp/gmsl_ssh_sock ] && ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip> 2>/dev/null
    ```
-   (as a normal user, files a sudo command created there need `echo '<pw>' | sudo -S rm -f ...`
+   (as a normal user, files a sudo command created there need `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -f ...`
    with the board's password). On Windows, close the paramiko connection.
 4. **Kernel tree outside `<work_dir>`:** if `kernel_src_path` is set and not inside `<work_dir>`
    (for example a `/tmp` tree of this run), remove it (only after step 1 printed nothing); it may
@@ -622,7 +658,7 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
    with sudo:
    ```bash
    rm -rf <kernel_src_path>
-   echo '<pw>' | sudo -S rm -rf <kernel_src_path>      # only after "Permission denied"
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf <kernel_src_path>      # only after "Permission denied"
    ```
    A kernel tree inside `<work_dir>` is handled in step 5.
 5. **Work folder** (only if `<work_dir>` exists). The entries this run created are the top-level
@@ -640,7 +676,7 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
    cd <work_dir> && rm -rf <entry> ...
    ```
    On `Permission denied` (root-owned files after `modules_install` or a mounted image), repeat
-   the same command with `echo '<pw>' | sudo -S rm -rf ...`. Then remove `<work_dir>` itself only
+   the same command with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...`. Then remove `<work_dir>` itself only
    if `work_dir_created` is `True` and it is empty (`rmdir <work_dir>`). Never delete a work folder
    the run did not create. If the user's own NXP download (`nxp_image_path`) or a kept image is
    inside `<work_dir>`, leave that file out, and say so. Copy the backups in `<work_dir>`
@@ -655,13 +691,19 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
    created: `/tmp/gmsl_*` entries older than `run_started` belong to something else (another tool
    or the user's own files can use the same prefix) and are never deleted; list them and tell the
    user they were kept:
+   With `verbosity` = `verbose`, keep `/tmp/gmsl_pw_*` and `/tmp/gmsl_askpass` here: §Verbose
+   mode §Package step 4 reads them, and step 6 of §Package deletes them. Otherwise they go with
+   the other files:
    ```bash
    rm -rf /tmp/gen_gmsl_dts /tmp/gmsl_ssh_sock
-   python3 -I - <run_started> <<'EOF'
+   python3 -I - <run_started> <1 if verbose, else 0> <<'EOF'
    import glob, os, shutil, sys
-   t0 = int(sys.argv[1])
+   t0, keep_pw = int(sys.argv[1]), sys.argv[2] == '1'
    for p in sorted(glob.glob('/tmp/gmsl_*')):
        if p == '/tmp/gmsl_camera_state.json':
+           continue
+       if keep_pw and (p.startswith('/tmp/gmsl_pw_') or p == '/tmp/gmsl_askpass'):
+           print('kept until the verbose package:', p)
            continue
        if os.lstat(p).st_mtime < t0:
            print('kept (not this run):', p)
@@ -682,7 +724,7 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
    (Without `run_started` in the state — an older run's state — list the `/tmp/gmsl_*` entries
    with their dates and delete only those this run made, by name.)
    If `rm` or the script reports `Permission denied` (files created with sudo, for example in a
-   mount point directory), repeat it for those paths only with `echo '<pw>' | sudo -S rm -rf ...` (before the state file is
+   mount point directory), repeat it for those paths only with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...` (before the state file is
    removed, while the password is still known) — only after step 1 printed nothing. With the
    "No, abort" exception, leave out the kept image. On Windows, remove `%TEMP%\gen_gmsl_dts`,
    `%TEMP%\gmsl_*` and `%TEMP%\gmsl_camera_state.json` instead.
@@ -691,8 +733,9 @@ repeat with `echo '<pw>' | sudo -S rm -rf ...` only for what reported `Permissio
    ls -d /tmp/gen_gmsl_dts /tmp/gmsl_* /tmp/gmsl_camera_state.json /tmp/gmsl_rpi_boot \
      /tmp/gmsl_rpi_rootfs /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs <kernel_src_path> 2>/dev/null
    ```
-   The command must print nothing (except a kept "No, abort" image and the `/tmp/gmsl_*` entries
-   older than `run_started` that step 6 kept). If entries of `<work_dir>`
+   The command must print nothing (except a kept "No, abort" image, the `/tmp/gmsl_*` entries
+   older than `run_started` that step 6 kept, and, in a verbose run, `/tmp/gmsl_pw_*` and
+   `/tmp/gmsl_askpass` until §Verbose mode §Package step 6). If entries of `<work_dir>`
    were deleted, `ls -d <work_dir>/<entry> 2>/dev/null` must print nothing for each of them (and
    `ls -d <work_dir>` too when the run created the folder and it was removed); the same for
    `<uuu_win_dir>` if it was deleted.
@@ -764,6 +807,7 @@ reference documents instead of guessing. Fetch documents with `curl -fsSL` (use 
 | Deserializer probe fails with `-121`, but `i2cdetect` finds devices on the bus | Wrong I2C address. Compare the deserializer's CFG0 level with the CFG table of the platform's hardware guide, and find the real address with `i2cdetect -y -r <bus>` on the board (the camera I2C bus of common/3 §I2C probe; on a bus shared with power-critical devices, read single addresses only: `i2cdetect -y -r <bus> <addr> <addr>`). Regenerate the device tree with `"address": "<addr>"` in the JSON (the optional deserializer `"address"` key is read by the `des.dtsi.in` template; common/4 §JSON). |
 | `Cannot find serializer for link N` / `failed to find a free alias` | A configured link has no camera, or the GMSL link does not lock: check the coax cable, which input it uses, and the CFG1 levels (coax vs STP, link speed) of both chips in the hardware guide. |
 | No `v4l-subdev*` nodes | One failed link prevents the whole media graph from registering; see the previous row. |
+| Frames arrive but are empty or squeezed (common/8 content check `FAIL`: only the first line has data, or only the left part of each line) | The receiver and the GMSL link disagree on the line or pixel format, not a display problem. Run the test-pattern geometry test (common/8 §Frame check). On the i.MX93: only line 0 = GMSL tunnel mode (use pixel mode), left third = receiver in 48-bit mode (receiver patch): nxp/1 §i.MX93. On other boards compare the receiver's data type and IPI/pixel mode with the format, and the deserializer's `--log-status` (`mode: tunnel`/`pixel`). |
 | STREAMON succeeds but no frames arrive | Run `v4l2-ctl --log-status` on the deserializer and serializer subdevices (README-GMSL.md of the ADI branch) and check where the packet counters stop. `video_lock: 0` is normal in tunnel mode. |
 | A tool fails with `EBUSY` | Another process (a viewer, v4l2-ctl, an earlier configuration run) holds the video devices; close it and retry. |
 | No GMSL driver messages in `dmesg` and no `v4l-subdev*` nodes, on an image other than the ADI GMSL images | Check that the boot config that is actually used loads the GMSL device tree (the platform file's install section), and run common/3 §Driver check again: the kernel may not have the ADI GMSL drivers. |

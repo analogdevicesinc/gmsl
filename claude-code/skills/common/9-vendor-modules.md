@@ -109,12 +109,15 @@ Without `CONFIG_MODVERSIONS`, `make modules_prepare` is enough. Record `kernel_b
 
 ## CRC check
 
+(Not used when the whole kernel is replaced by one built here, as the NXP debug kernel of nxp/1
+§Debug kernel: then the kernel and every module come from the same tree.)
+
 **Verify the CRCs** against a module from the board before trusting the tree: dump the CRCs of
 a vendor module and compare them with `Module.symvers`. Any mismatch means the modules would be
 refused (`disagrees about version of symbol`); fix the compiler or config first.
 ```bash
 # live board: on the board (decompress .ko.xz/.ko.zst first, in /tmp)
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "f=\$(modinfo -n videodev); case \$f in *.xz) xz -dc \$f > /tmp/gmsl_m.ko;; *.zst) zstd -dcq \$f > /tmp/gmsl_m.ko;; *) cp \$f /tmp/gmsl_m.ko;; esac; modprobe --dump-modversions /tmp/gmsl_m.ko; rm -f /tmp/gmsl_m.ko" > /tmp/gmsl_board_crcs.txt
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "f=\$(modinfo -n videodev); case \$f in *.xz) xz -dc \$f > /tmp/gmsl_m.ko;; *.zst) zstd -dcq \$f > /tmp/gmsl_m.ko;; *) cp \$f /tmp/gmsl_m.ko;; esac; modprobe --dump-modversions /tmp/gmsl_m.ko; rm -f /tmp/gmsl_m.ko" > /tmp/gmsl_board_crcs.txt
 # image: on the host
 modprobe --dump-modversions /tmp/gmsl_m.ko > /tmp/gmsl_board_crcs.txt
 # compare
@@ -169,6 +172,27 @@ boards (best effort, generic/0 §Best-effort plan), tell the user what is missin
 to try the backport (rpi/1's patch-backport approach as the reference); otherwise stop and
 report.
 
+## Pixel mode
+
+ADI's deserializer drivers choose the GMSL mode themselves: **tunnel mode** whenever the
+deserializer and every serializer support it and each pipe goes to one PHY
+(`max_des_populate_remap_context_mode()` in `max_des.c`), otherwise pixel mode. They have **no**
+module parameter or device tree property for it; do not offer one that does not exist. Some
+receivers need pixel mode (the platform file says which: nxp/1 §i.MX93). Then add a local module
+parameter, as its own commit marked as a local addition:
+```bash
+cd <work_dir>/maxim-serdes && git apply --check <skill dir>/common/patches/max_des-force-pixel-mode.patch \
+  && git apply <skill dir>/common/patches/max_des-force-pixel-mode.patch \
+  && git -c user.name=gmsl-skill -c user.email=gmsl@localhost commit -qam "max_des: force_pixel_mode parameter (local addition, not in ADI's driver)"
+```
+It adds `force_pixel_mode` (bool, `0444`) to `max-serdes` and, when set, restricts
+`max_des_get_supported_modes()` to `MAX_SERDES_GMSL_PIXEL_MODE` (every ADI deserializer supports
+it). Build as usual, then check `modinfo -p max-serdes.ko` lists `force_pixel_mode`. It is set
+with `/etc/modprobe.d/gmsl.conf`: `options max_serdes force_pixel_mode=1` (in the mounted image
+on the image path); the platform file's final message lists the file and its undo (delete it,
+reboot). Check after the next stream start: `v4l2-ctl -d <deserializer subdev> --log-status`
+shows `mode: pixel`.
+
 ## Sensor driver
 
 The ADI serializer drivers get the sensor's CSI-2 data type and virtual channel through the
@@ -202,7 +226,7 @@ next boot and stream start, and list the workaround in the final message.
 Ask first. Before installing, look for modules with the same names anywhere under `updates/`
 (for example from an earlier manual install of the ADI drivers):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "find /lib/modules/\$(uname -r)/updates \( -name 'max*.ko*' -o -name '<sensor>.ko*' \) 2>/dev/null"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /lib/modules/\$(uname -r)/updates \( -name 'max*.ko*' -o -name '<sensor>.ko*' \) 2>/dev/null"
 ```
 If modules with the names of the new ones (`max-serdes`/`max_serdes`, `max96717`, `max9296a`,
 `max96724`, `<sensor>`) are in another `updates/` subfolder than `updates/<subfolder>/`, tell the
@@ -222,15 +246,15 @@ back).
 Copy the modules to `/lib/modules/$(uname -r)/updates/<subfolder>/` (the platform file names
 `<subfolder>`, e.g. `gmsl`), run `depmod -a`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "mkdir -p /tmp/gmsl_mods"
-scp -o ControlPath=/tmp/gmsl_ssh_sock <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] <user>@<ip>:/tmp/gmsl_mods/
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "echo '<pw>' | sudo -S sh -c 'mkdir -p /lib/modules/\$(uname -r)/updates/<subfolder> && cp /tmp/gmsl_mods/*.ko /lib/modules/\$(uname -r)/updates/<subfolder>/ && depmod -a'; rm -rf /tmp/gmsl_mods"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p /tmp/gmsl_mods"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] <user>@<ip>:/tmp/gmsl_mods/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'mkdir -p /lib/modules/\$(uname -r)/updates/<subfolder> && cp /tmp/gmsl_mods/*.ko /lib/modules/\$(uname -r)/updates/<subfolder>/ && depmod -a'; rm -rf /tmp/gmsl_mods"
 ```
 Check with `modinfo -n <module>` that the new ones are picked (the path must be in
 `updates/<subfolder>/`), and test-load them once before the device tree exists (`modprobe
 max9296a` / `max96717`: no "disagrees about version of symbol" in `dmesg`), then unload them:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "for m in max-serdes max96717 <des module> <sensor>; do modinfo -n \$m; done; echo '<pw>' | sudo -S sh -c 'modprobe <des module> && modprobe max96717; dmesg | tail -5; modprobe -r max96717 <des module> max-serdes'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "for m in max-serdes max96717 <des module> <sensor>; do modinfo -n \$m; done; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'modprobe <des module> && modprobe max96717; dmesg | tail -5; modprobe -r max96717 <des module> max-serdes'"
 ```
 A module that is part of a live media graph cannot be unloaded (`is in use`); replacing it needs
 a reboot (common/5 §Reboot).
@@ -247,9 +271,9 @@ was replaced or moved: the backup in `~/Workspace/gmsl_modules_backup/`, or the 
 Without a live board, install into the mounted rootfs of the image (nxp/0 §Mount):
 ```bash
 REL=<rel>
-echo '<pw>' | sudo -S mkdir -p /tmp/gmsl_nxp_rootfs/lib/modules/$REL/updates/gmsl
-echo '<pw>' | sudo -S cp <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] /tmp/gmsl_nxp_rootfs/lib/modules/$REL/updates/gmsl/
-echo '<pw>' | sudo -S depmod -b /tmp/gmsl_nxp_rootfs $REL
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A mkdir -p /tmp/gmsl_nxp_rootfs/lib/modules/$REL/updates/gmsl
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cp <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] /tmp/gmsl_nxp_rootfs/lib/modules/$REL/updates/gmsl/
+SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A depmod -b /tmp/gmsl_nxp_rootfs $REL
 ```
 `depmod -b` on the host (package `kmod`) writes the image's `modules.dep` for that release; it
 does not touch the host's own modules. Check:

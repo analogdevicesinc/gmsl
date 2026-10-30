@@ -1,0 +1,20 @@
+diff --git a/drivers/media/platform/nxp/dwc-mipi-csi2.c b/drivers/media/platform/nxp/dwc-mipi-csi2.c
+index 0cf1eeb99..ab7bdb167 100644
+--- a/drivers/media/platform/nxp/dwc-mipi-csi2.c
++++ b/drivers/media/platform/nxp/dwc-mipi-csi2.c
+@@ -637,6 +637,15 @@ static void dwc_csi_device_ipi_config(struct dwc_csi_device *csidev)
+ 	val &= ~CSI2RX_IPI_MODE_CONTROLLER;
+ 	val &= ~CSI2RX_IPI_MODE_COLOR_MODE16;
+ 	val |= CSI2RX_IPI_MODE_CUT_THROUGH;
++	/*
++	 * i.MX93: the IPI feeds the ISI directly (no pixel formatter as on the
++	 * i.MX95). RAW data must use the 16-bit IPI interface: in 48-bit mode only
++	 * one of three pixels reaches the ISI (the image is squeezed 3:1).
++	 */
++	if (of_machine_is_compatible("fsl,imx93") &&
++	    csi_fmt->data_type >= MIPI_CSI2_DT_RAW6 &&
++	    csi_fmt->data_type <= MIPI_CSI2_DT_RAW14)
++		val |= CSI2RX_IPI_MODE_COLOR_MODE16;
+ 	dwc_csi_write(csidev, CSI2RX_IPI_MODE, val);
+ }
+ 

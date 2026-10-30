@@ -58,7 +58,7 @@ The content for the board part of the orchestrator's single §Final message (not
 message). The board is left in its deployed state (orchestrator §Rules: nothing installed is removed).
 Only the scratch files the skill put in the board's `/tmp` are deleted:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock <user>@<ip> -- "rm -f /tmp/gmsl.dtbo /tmp/extlinux.conf.new /tmp/gmsl_dtb.tmp; rm -rf /tmp/gmsl_mods"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "rm -f /tmp/gmsl.dtbo /tmp/extlinux.conf.new /tmp/gmsl_dtb.tmp; rm -rf /tmp/gmsl_mods"
 ```
 Tell the user what is installed on the board and how to undo each item:
 - **Runtime overlay** (method 1): applied until the next reboot; remove it earlier with
