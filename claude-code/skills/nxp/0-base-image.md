@@ -89,10 +89,21 @@ Pick the files for the board, by its Yocto machine name (FRDM-IMX95-PRO:
 - the root filesystem image: `*<machine>*.wic.zst` (or `.wic.bz2`, `.wic`); prefer the full
   image with the desktop (`imx-image-full-*`, Weston is needed for the viewer) over
   `core-image-minimal`/`multimedia` if several are listed;
-- the bootloader for eMMC flashing with uuu: `imx-boot*<machine>*flash*` (for example
-  `imx-boot-<machine>-sd.bin-flash_all`; on i.MX95 the name can also contain the SoC revision).
+- the bootloader for eMMC flashing with uuu: exactly `imx-boot-<machine>-sd.bin-flash_all`. On
+  i.MX95 B-revision silicon the name has `-b1-` before the board part
+  (`imx-boot-imx95-b1-19x19-lpddr5-evk-sd.bin-flash_all`): when the release has both a `-b1-`
+  and a plain file for the machine, ask the user which silicon revision the board has (the chip
+  marking, or `cat /sys/devices/soc0/revision` on a running board). A release lists
+  more files for the same machine; they are not the one for uuu: `-sd-ecc.bin-flash_all` (DRAM
+  ECC enabled), `-sd.bin-flash_a55` / `-sd-ecc.bin-flash_a55` (other core configuration),
+  `-fspi.bin-flash_a55_flexspi` (boots from FlexSPI flash, not from eMMC or SD), and
+  `imx-boot-variant-*` (special builds: jailhouse, netc, rpmsg, sof, alt). Release 6.18.37-2.1.0
+  has 6 files for `imx95-19x19-lpddr5-frdm-pro` (5 `imx-boot-imx95-19x19-lpddr5-frdm-pro-*` files and
+  1 `imx-boot-variant-jailhouse-*` file); the one used is
+  `imx-boot-imx95-19x19-lpddr5-frdm-pro-sd.bin-flash_all`.
 
-If no file matches the board, or more than one could be it, show the candidates and ask the user.
+If no file matches the board, or the exact name is missing and more than one could be it, show
+the candidates and ask the user.
 Extract only those files:
 ```bash
 unzip -o -j '<nxp_image_path>' '<wic member>' '<imx-boot member>' -d <work_dir>/nxp-image/
@@ -123,6 +134,8 @@ after the board's machine, compare the two bootloaders' built-in `fdtfile`:
 head -c 8M '<wic>' | strings | grep -m1 -E '^fdtfile='
 strings '<imx_boot>' | grep -m1 -E '^fdtfile='
 ```
+(the built-in environment can print the value in quotes, `fdtfile="imx95-...dtb"`: compare the
+names without the quotes.)
 If they differ (the `.wic` names another board's DTB), tell the user and ask (header:
 "Bootloader"): **Write the board's bootloader into the copy (Recommended)** | **Stop**. Then clear
 the old bootloader area of the copy (the other board's can be longer: on 6.18.37-2.1.0 the EVK's
@@ -287,7 +300,9 @@ the login `root` / `analog`).
      ```
      Otherwise change the existing lines in `sshd_config` with `sudo sed -i` (or append them if
      absent); the first value of a keyword wins in OpenSSH, so remove or change earlier lines.
-     Yocto images can also have `sshd_config_readonly`: change it the same way.
+     Yocto images can also have `sshd_config_readonly` (readable only by root: check it with the
+     same `sudo -A grep` as `sshd_config`). If it has the same `Include` line, the drop-in covers
+     it too; otherwise change it the same way.
    - Dropbear: `DROPBEAR_EXTRA_ARGS` in `/etc/default/dropbear` must not contain `-w` (no root
      login), `-s` (no password logins) or `-g` (no password logins for root); remove those
      flags.

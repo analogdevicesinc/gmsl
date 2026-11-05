@@ -46,12 +46,13 @@ For each hostname:
 - Also try `<hostname>-2.local`: mDNS renames duplicate hostnames, so if it resolves, more
   than one board is on the network. Then use AskUserQuestion to let the user pick one.
 
-If nothing resolves, retry every 10 s for up to 2 minutes (a freshly flashed board takes a
-while to boot; an NXP board's first boot from a new medium can take longer, as it resizes the
-root file system). Images without an mDNS responder (`avahi-daemon`) never resolve: go on with
-§MAC search. If nothing has resolved after the first minute, or the user says the board is
-already up (for example its desktop shows on the monitor), run §MAC search now instead of
-waiting for the rest of the retries: mDNS often does not cross between Wi-Fi and wired clients
+If nothing resolves, retry every 10 s, **for 1 minute at most** (6 tries; a freshly flashed board
+takes a while to boot). After that minute, or at once when the user says the board is already up
+(for example its desktop shows on the monitor), **switch to §MAC search**: do not keep waiting for
+mDNS. Images without an mDNS responder (`avahi-daemon`) never resolve. §MAC search repeats its
+search once when it finds nothing, for a board that is still booting (a first boot from a new
+medium can take a few minutes, as it resizes the root file system); try the names once more
+then too. mDNS often does not cross between Wi-Fi and wired clients
 of the same router (WSL host on Wi-Fi, FRDM-IMX95-PRO on Ethernet with avahi running:
 `analog-imx-gmsl.local` never resolved, while §MAC search found the board on its first read).
 Check the host's link type on WSL/Windows with
@@ -129,15 +130,23 @@ seconds before the next attempt):
 
 Each candidate password goes into `/tmp/gmsl_pw_board` first (default logins: `(umask 077; printf '%s\n' analog > /tmp/gmsl_pw_board)`; a password the user typed: the same once, the only command that contains it), and `sshpass -f` reads it:
 ```bash
-sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no \
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
   -o ConnectTimeout=10 <user>@<ip> -- \
-  "hostname; uname -r; tr -d '\0' < /proc/device-tree/model; echo; tr '\0' ' ' < /proc/device-tree/compatible; echo; test -d ~/Workspace/pyv4l2 && echo pyv4l2; test -d /opt/gen_gmsl_dts && echo gen_gmsl_dts"
+  "hostname; uname -r; tr -d '\0' < /proc/device-tree/model; echo; tr '\0' ' ' < /proc/device-tree/compatible; echo; test -d ~/Workspace/pyv4l2 && echo pyv4l2; test -d /opt/gen_gmsl_dts && echo gen_gmsl_dts; true"
 ```
-(on Windows, use common/0 §Windows adaptations instead of `sshpass`).
+(on Windows, use common/0 §Windows adaptations instead of `sshpass`). The final `true` makes a
+working login exit with 0 even when the last folder is missing; a failed login still exits with
+5 (`sshpass`: wrong password) or 255 (`ssh`: no connection, refused, timeout).
 
-- If SSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, the board's SD card or eMMC was most
-  likely reflashed (always the case after this run flashed it): tell the user, run
-  `ssh-keygen -R <ip>` (and `ssh-keygen -R <hostname>.local` if a name was used), and log in again.
+- Every direct connection to the board uses `-o StrictHostKeyChecking=no -o
+  UserKnownHostsFile=/dev/null -o LogLevel=ERROR`: the board's host key is never stored in
+  `~/.ssh/known_hosts`, so a reflashed board (new host key) connects without an error, and SSH
+  does not print `Warning: Permanently added ...` into the output (it would end up in the saved
+  reports and logs); errors (refused, timeout, `Permission denied`) are still printed. If an older entry in
+  `~/.ssh/known_hosts` still makes SSH report `REMOTE HOST IDENTIFICATION HAS CHANGED` (for
+  example a command typed without these options), the board was most likely reflashed: tell the
+  user, run `ssh-keygen -R <ip>` (and `ssh-keygen -R <hostname>.local` if a name was used), and
+  log in again.
 - `Permission denied` right after a boot can come before logins work (common/5 §Reboot): on a
   board that has just booted, wait 30 seconds and try the same credentials once more before
   trying the next ones.

@@ -39,7 +39,8 @@ refuse an empty password); if it fails, the user sets a root password on the boa
 Used in all the files:
 - `<skill dir>`: the folder of this file (for example the `skills` folder Claude Code was started
   in, or `~/.claude/skills/gmsl-camera-pipeline` when the skill was copied there).
-  The helpers `assess.sh`, `i2cburst.c` and `i2c_retry_regmap.h` are in `<skill dir>/common/`.
+  The helpers `assess.sh`, `i2cburst.c` and `i2c_retry_regmap.h` are in `<skill dir>/tools/`, the
+  driver patches in `<skill dir>/patches/`.
 - `<work_dir>`: the host folder for big trees and downloads (kernel and U-Boot trees, driver
   repositories, toolchains, images), default `~/gmsl-camera-work` (state `work_dir`). Use its
   absolute path in commands.
@@ -150,8 +151,9 @@ live-board path (Q1 Yes); everything that builds or flashes needs WSL or Linux.
 ### Step 1: State
 
 Create the state file (§State) and store `verbosity` (and, with `verbose`, `run_dir` and `log`),
-`run_started` (`int(time.time())`, before any `/tmp/gmsl_*` file of this run exists; §Cleanup
-deletes only `/tmp/gmsl_*` files created after it), `host` and `work_dir` (`~/gmsl-camera-work` as an
+`run_started` (`int(time.time())`, taken before the state file and any other `/tmp/gmsl_*` file of
+this run is created; §Cleanup deletes only `/tmp/gmsl_*` files created after it, and always the
+state file), `host` and `work_dir` (`~/gmsl-camera-work` as an
 absolute path, unless the user named another folder). Do not create `<work_dir>` yet: the
 steps that need it create it. Record whether this run creates it: if the folder already exists,
 store `work_dir_created` = `False` and its top-level entries as `work_dir_preexisting`
@@ -322,7 +324,8 @@ display common/0 §WSL installation instructions.
    and follow §Hardware questions and §Per-camera questions in the offline way it describes,
    with the option lists of nxp/5 §Hardware choices.
 4. Read `<skill dir>/common/0-host.md` and follow §Sudo password, §Host tools and (WSL) §usbipd
-   (for SD on WSL, and for eMMC when `uuu` runs inside WSL). For SD, also read
+   (for SD on WSL, and for eMMC only when the Linux `uuu` runs inside WSL; skip §usbipd for eMMC
+   with `uuu.exe` on the Windows side, the default on WSL in nxp/4). For SD, also read
    `<skill dir>/common/11-sd-card.md` and follow §Detect now.
 5. Read and follow, in order: `<skill dir>/nxp/0-base-image.md` (it unpacks and mounts the image
    in `<work_dir>`, reads the release, and sets the hostname and login for discovery:
@@ -360,7 +363,7 @@ drivers against the board's kernel when its source is public). Ask (header: "Boa
   from the state. All local sudo commands use
   `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'` (passwordless: `sudo <cmd>`).
 - Use sshpass for SSH logins. One control socket per run, `/tmp/gmsl_ssh_sock` (common/5
-  §Control socket); all commands through it use `ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "<cmd>"`.
+  §Control socket); all commands through it use `ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "<cmd>"`.
   If a command through the socket prints `Control socket connect(...)`, stop and open the socket
   again before running anything else (common/5 §Control socket).
 - All sudo commands on the board use `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'`; logged in as `root`,
@@ -376,7 +379,9 @@ drivers against the board's kernel when its source is public). Ask (header: "Boa
 - Disregard the existing board configuration, except conflicting camera settings in the boot
   config, which are only changed after the user agrees. Every boot-configuration change (boot
   config file, U-Boot environment, extlinux, a new DTB) is made only after the user agrees, with
-  the exact change (old → new) and the recovery shown in the question.
+  the exact change (old → new) and the recovery shown in the question. Exception: on a Raspberry
+  Pi, adding `gmsl.dtbo` and the `dtoverlay=gmsl` line (rpi/4 §Install device tree) needs no
+  question; tell the user what was changed and how to undo it (and list it in §Final message).
 - Never modify vendor files: the vendor's DTBs (a merged DTB goes next to the original, under a
   new name), the vendor kernel's modules (ADI modules go to `updates/gmsl/` and never reuse the
   name of a vendor module), NXP's own modules in `updates/` and the image's other contents.
@@ -458,7 +463,7 @@ These apply to every step of every file until the end of the run:
   (for example `STEP common/4 §Generate`).
 - Run every command so that its output also goes to the log, followed by its exit code:
   ```bash
-  echo '$ <command, with every password replaced by ****>' >> <log>
+  echo '$ <command, with every password replaced by <password>>' >> <log>
   ( <command> ) 2>&1 | tee -a <log>; echo "exit=${PIPESTATUS[0]}" >> <log>
   ```
   Long-running commands (the kernel build, `dd`, `uuu`, large downloads) write their output to a
@@ -469,7 +474,7 @@ These apply to every step of every file until the end of the run:
   platform and model, kernel release, login used, ADI branch, toolchain, kernel and U-Boot tags,
   the NXP release link) as `DETECTED <item>: <value>`.
 - Log every user answer as `ANSWER <header>: <value>`. Never write a password: log credentials as
-  `<user> / ****`.
+  `<user> / <password>`.
 - Log every warning shown to the user, every retry, every error, every document consulted in a
   Troubleshooting section, and every decision taken when something did not go as expected (what
   happened, what you concluded, what you did next) as `NOTE: <text>`.
@@ -509,18 +514,28 @@ In addition to the log (read-only commands on the board; a failing command is no
 Run it as the **last** step of §Cleanup (also when the run stops early):
 1. Before §Cleanup deletes anything (its step 0): copy into `<run_dir>` what the run generated
    on the host: `/tmp/gen_gmsl_dts` (templates, JSON, overlay, DTBO, glue) into
-   `<run_dir>/gen_gmsl_dts/`, the merged DTB, `/tmp/gmsl_*` scratch files of this run (newer than `run_started`, §Cleanup
-   step 6) except the state file and the control socket into `<run_dir>/host/`, a copy of the state file without the password
-   key `board_pw` as `<run_dir>/host/state.json`, and copies of any backup the
-   run made (U-Boot environment backup). Never copy kernel trees, toolchains or images.
-2. After the other §Cleanup steps, append the final summary to the log:
+   `<run_dir>/gen_gmsl_dts/`, the merged DTB, `/tmp/gmsl_*` scratch files of this run (newer than
+   `run_started`, §Cleanup step 6) into `<run_dir>/host/`, a copy of the state file without the
+   password key `board_pw` as `<run_dir>/host/state.json`, and copies of any backup the run made
+   (U-Boot environment backup). Never copy kernel trees, toolchains or images, and never copy the
+   state file, the control socket, the password files `/tmp/gmsl_pw_*` or the helper
+   `/tmp/gmsl_askpass` (they stay in `/tmp` for step 4 and are deleted in step 6):
    ```bash
-   { echo "[$(date -Iseconds)] END"
-     echo "Result: <success: frames received and viewer started | failed at <file> <step>: <reason> | stopped at <file> <step>: <reason>>"
-     echo "Files:"; cd <run_dir> && find . -type f | sort
-   } >> <log>
+   python3 -I - <run_dir> <run_started> <<'EOF'
+   import glob, json, os, shutil, sys
+   rd, t0 = sys.argv[1], int(sys.argv[2])
+   skip = ('/tmp/gmsl_camera_state.json', '/tmp/gmsl_ssh_sock', '/tmp/gmsl_askpass')
+   for p in sorted(glob.glob('/tmp/gmsl_*')):
+       if p in skip or p.startswith('/tmp/gmsl_pw_') or os.lstat(p).st_mtime < t0:
+           continue
+       dst = os.path.join(rd, 'host', os.path.basename(p))
+       (shutil.copytree if os.path.isdir(p) else shutil.copy2)(p, dst)
+       print('copied', os.path.basename(p))
+   s = json.load(open('/tmp/gmsl_camera_state.json')); s.pop('board_pw', None)
+   json.dump(s, open(os.path.join(rd, 'host', 'state.json'), 'w'), indent=2)
+   EOF
    ```
-3. Copy the Claude Code session transcript into the run folder:
+2. After the other §Cleanup steps, copy the Claude Code session transcript into the run folder:
    ```bash
    f=$(find ~/.claude/projects -name "${CLAUDE_CODE_SESSION_ID:-none}.jsonl" 2>/dev/null | head -1)
    if [ -n "$f" ]; then cp "$f" <run_dir>/session_transcript.jsonl && echo "Transcript: $f" >> <log>
@@ -528,12 +543,28 @@ Run it as the **last** step of §Cleanup (also when the run stops early):
    ```
    If the transcript was not found, tell the user to export it with `/export` and keep it with
    the ZIP.
-4. Remove every password used in the run from every file of the run folder (the board password
-   unless it is the default `analog`, the host's sudo password, a root password set in an image).
-   The script reads them from the password files (`/tmp/gmsl_pw_sudo`, `/tmp/gmsl_pw_board`, and
-   any other `/tmp/gmsl_pw_*` the run wrote): never type a password, or part of one, into this or
-   any other command. It replaces the raw, JSON-escaped and shell-quoted forms, then counts what is
-   left, including pieces of 5 or more characters, and prints only counts and file names:
+3. Append the final summary to the log (after step 2, so that its file list includes the
+   transcript):
+   ```bash
+   { echo "[$(date -Iseconds)] END"
+     echo "Result: <success: frames received and viewer started | failed at <file> <step>: <reason> | stopped at <file> <step>: <reason>>"
+     echo "Files:"; cd <run_dir> && find . -type f | sort
+   } >> <log>
+   ```
+4. Replace every password used in the run by `<password>` in every file of the run folder (the
+   board password unless it is the default `analog`, the host's sudo password, a root password
+   set in an image). The script reads them from the password files (`/tmp/gmsl_pw_sudo`,
+   `/tmp/gmsl_pw_board`, and any other `/tmp/gmsl_pw_*` the run wrote): never type a password, or
+   part of one, into this or any other command. It replaces the raw, JSON-escaped and
+   shell-quoted forms, and prints only how many it replaced, per file relative to `<run_dir>`
+   (never an absolute path: a home path can contain the password, for example when it equals the
+   user name). Nothing is asked: a password that equals the user name also turns that name into
+   `<password>` wherever it appears (for example `/home/<password>/`), which is expected.
+
+   **From this step on, nothing more is written into `<run_dir>`.** Run the scrub and steps 5–6
+   without the §Logging rules wrapper: their output goes to the chat only. Run step 2 (the
+   transcript) and step 3 (the END summary) before it, and if the log needs a note after the scrub,
+   append it first and run the scrub again.
    ```bash
    python3 -I - <run_dir> <<'EOF'
    import glob, json, os, sys
@@ -546,36 +577,48 @@ Run it as the **last** step of §Cleanup (also when the run stops early):
    for p in pws:
        for v in (p, json.dumps(p)[1:-1], p.replace("'", "'\\''"), json.dumps(p.replace("'", "'\\''"))[1:-1]):
            forms.add(v.encode())
-   files = [os.path.join(r, n) for r, _, ns in os.walk(sys.argv[1]) for n in ns]
-   for path in files:
-       data = open(path, 'rb').read(); new = data
-       for form in sorted(forms, key=len, reverse=True):
-           new = new.replace(form, b'****')
-       if new != data:
-           open(path, 'wb').write(new)
-   for i, p in enumerate(pws, 1):
-       pieces = {p[a:b].encode() for a in range(len(p)) for b in range(a + 5, len(p) + 1)} if len(p) >= 5 else {p.encode()}
-       hits = {path: sum(open(path, 'rb').read().count(x) for x in pieces) for path in files}
-       hits = {k: v for k, v in hits.items() if v}
-       print(f'password {i} ({len(p)} chars): {sum(hits.values())} remaining piece matches', *sorted(hits), sep='\n  ')
+   print(f'passwords: {len(pws)}')
+   for r, _, ns in os.walk(sys.argv[1]):
+       for n in ns:
+           path = os.path.join(r, n)
+           data = open(path, 'rb').read(); new = data; count = 0
+           for form in sorted(forms, key=len, reverse=True):
+               count += new.count(form); new = new.replace(form, b'<password>')
+           if count:
+               open(path, 'wb').write(new)
+               print(f'  {os.path.relpath(path, sys.argv[1])}: {count} replaced')
    EOF
    ```
-   Every password must show `0 remaining piece matches`. Otherwise tell the user how many and in
-   which files (never the text), and ask whether to replace those pieces too (they can be common
-   words or parts of paths, for example a password that equals the user name) or to keep the
-   folder for manual review. A password shorter than 5 characters is replaced only as a whole: log
-   `NOTE: password of <n> characters, pieces not checked`.
+   `passwords: 0` while the run used sudo or a board password other than `analog` means the
+   password files are gone (for example WSL restarted and emptied `/tmp`): do not create the ZIP;
+   ask the user to type the password again in the chat, write it to its file as common/0
+   §Sudo password (or common/1 §Login for the board) describes, and run this step again.
 5. Create the ZIP next to the run folder, check it, and delete the folder only if the check
-   passed:
+   passed. The check tests the archive, confirms that no password file or `gmsl_askpass` is in
+   it, and counts the exact password forms in every entry (the same forms as step 4):
    ```bash
    cd "$(dirname <run_dir>)" && python3 -m zipfile -c "$(basename <run_dir>).zip" "$(basename <run_dir>)" \
-     && python3 -m zipfile -t "$(basename <run_dir>).zip" \
-     && python3 -m zipfile -l "$(basename <run_dir>).zip" \
-     && rm -rf <run_dir>
+     && python3 -I - "$(basename <run_dir>).zip" <<'EOF' && rm -rf <run_dir>
+   import glob, json, os, sys, zipfile
+   forms = set()
+   for f in sorted(glob.glob('/tmp/gmsl_pw_*')):
+       p = open(f).read().splitlines()[0] if os.path.getsize(f) else ''
+       if p and p != 'analog':
+           for v in (p, json.dumps(p)[1:-1], p.replace("'", "'\\''"), json.dumps(p.replace("'", "'\\''"))[1:-1]):
+               forms.add(v.encode())
+   z = zipfile.ZipFile(sys.argv[1])
+   bad = z.testzip()
+   names = z.namelist()
+   pwfiles = [n for n in names if os.path.basename(n).startswith('gmsl_pw_') or os.path.basename(n) == 'gmsl_askpass']
+   exact = sum(1 for n in names for x in forms if x in z.read(n))
+   print(f'entries {len(names)}, test {"ok" if bad is None else "FAILED at " + bad}, password files {len(pwfiles)}, exact password matches {exact}')
+   sys.exit(0 if bad is None and not pwfiles and not exact else 1)
+   EOF
    ls -d <run_dir> 2>/dev/null
    ```
-   The last command must print nothing. If the ZIP could not be created or checked, keep the
-   folder and tell the user where it is.
+   It must print `test ok, password files 0, exact password matches 0`, and the last command must
+   print nothing. If the ZIP could not be created or the check failed, delete the ZIP, keep the
+   folder and tell the user where it is and what the check printed.
 6. Delete the password files: `rm -f /tmp/gmsl_pw_* /tmp/gmsl_askpass`, and check with
    `ls /tmp/gmsl_pw_* /tmp/gmsl_askpass 2>/dev/null` (must print nothing). Tell the user the full
    path of `<run_dir>.zip` and that it contains everything recorded during the run (in the final
@@ -584,8 +627,8 @@ Run it as the **last** step of §Cleanup (also when the run stops early):
 
 ## Cleanup
 
-Removes everything the run created on the host, except what the user keeps in `<work_dir>`
-(never a work folder, or an entry in it, that this run did not create). Run it at the end of every run, and whenever the run stops early (an error, or the user stops),
+Removes everything the run created on the host that is no longer needed (never a work folder,
+or an entry in it, that this run did not create). It asks no questions. Run it at the end of every run, and whenever the run stops early (an error, or the user stops),
 after reporting the error. Every command is safe to run when its target does not exist, so the
 procedure works no matter where the run stopped. It changes nothing on the board, except
 deleting the skill's own scratch files in the board's `/tmp` (step 3).
@@ -647,7 +690,7 @@ repeat with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...` only for what re
    stays while the viewer runs (it writes to it; with `verbosity` = `verbose`, §Verbose mode §What
    to save copies it first); the final message names it:
    ```bash
-   [ -S /tmp/gmsl_ssh_sock ] && ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /tmp -maxdepth 1 -name 'gmsl_*' ! -name gmsl_gst_view.log -exec rm -f {} +; rm -f /tmp/gmsl.dtbo /tmp/extlinux.conf.new"
+   [ -S /tmp/gmsl_ssh_sock ] && ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "find /tmp -maxdepth 1 -name 'gmsl_*' ! -name gmsl_gst_view.log -exec rm -f {} +; rm -f /tmp/gmsl.dtbo /tmp/extlinux.conf.new"
    [ -S /tmp/gmsl_ssh_sock ] && ssh -S /tmp/gmsl_ssh_sock -O exit <user>@<ip> 2>/dev/null
    ```
    (as a normal user, files a sudo command created there need `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -f ...`
@@ -665,13 +708,16 @@ repeat with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...` only for what re
    entries of `<work_dir>` that are not in `work_dir_preexisting` (all of them when
    `work_dir_created` is `True`), for example `rpi-linux`, `linux-imx` or `linux-lf-*`,
    `uboot-imx` or `uboot-<tag>`, `adi-linux`, `maxim-serdes`, the `<sensor>` driver repositories,
-   `nxp-image`, `arm-gnu-toolchain-*`, `uuu`, `kernel-build.log`, `env_backup_*.bin`. Entries that
-   existed before the run (a tree this run reused) are never offered. If this run created
-   nothing there, skip this step. Otherwise use AskUserQuestion (header: "Work folder"): list the
-   created entries with their sizes (`du -sh <work_dir>/<entry>`), and ask:
-   **Keep (Recommended)** (a later run reuses the kernel and U-Boot trees, toolchains, driver
-   repositories and the unpacked images, which saves the downloads and most of the build time) |
-   **Delete what this run created**. To delete (only after step 1 printed nothing):
+   `nxp-image`, `arm-gnu-toolchain-*`, `uuu`, the prepared Raspberry Pi OS image
+   (`*-raspios-*-gmsl.img`, rpi/3 Step 8, already written to the card), `kernel-build.log`,
+   `env_backup_*.bin`. Entries that
+   existed before the run (a tree this run reused) are never deleted. If this run created
+   nothing there, skip this step. Otherwise delete the created entries without asking: once the
+   medium is written and the board set up, nothing needs them. Before deleting: list them with
+   their sizes for the final message (`du -sh <work_dir>/<entry>`); with `verbosity` = `verbose`,
+   check that what §Verbose mode §What to save takes from them (build logs, the driver patches
+   of `git format-patch`) is already in `<run_dir>/host/` (step 0), and copy what is missing.
+   Delete (only after step 1 printed nothing):
    ```bash
    cd <work_dir> && rm -rf <entry> ...
    ```
@@ -682,11 +728,18 @@ repeat with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...` only for what re
    inside `<work_dir>`, leave that file out, and say so. Copy the backups in `<work_dir>`
    (`env_backup_*.bin`) out first (step 0).
 5a. **Windows-side uuu folder** (only if `uuu_win_dir` is set and exists, nxp/4 §eMMC with uuu):
-   it holds copies of `uuu.exe`, the `imx-boot` file and the image (several GB). Use
-   AskUserQuestion (header: "uuu folder"), showing its path and size (`du -sh <uuu_win_dir>`):
-   **Delete it (Recommended)** | **Keep it**. To delete: `rm -rf <uuu_win_dir>` (a file that
-   Windows still holds open: tell the user to close the program and delete the folder in
-   Explorer).
+   it holds only copies (`uuu.exe` from `<work_dir>/uuu/`, the `imx-boot` file and the image from
+   `<work_dir>/nxp-image/`, several GB), which nothing needs after the flash. Delete it without
+   asking. With `verbosity` = `verbose`, first copy into `<run_dir>/host/` whatever §Verbose mode
+   §What to save needs from it (any log uuu wrote there; nxp/4 already writes its output to
+   `<run_dir>/host/uuu.log`) and its file list (`ls -l <uuu_win_dir> > <run_dir>/host/uuu_folder.txt`);
+   never the program or the image copies. Then:
+   ```bash
+   rm -rf <uuu_win_dir>
+   ```
+   Only the folder recorded in `uuu_win_dir` (nxp/4 creates a new one each run), never another
+   folder. If Windows still holds a file in it open, tell the user to close the program and
+   delete the folder in Explorer.
 6. **Host temporary files**, the state file last (it may hold passwords). Only what this run
    created: `/tmp/gmsl_*` entries older than `run_started` belong to something else (another tool
    or the user's own files can use the same prefix) and are never deleted; list them and tell the
@@ -731,15 +784,18 @@ repeat with `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf ...` only for what re
 7. **Check** that nothing is left, and tell the user about anything that could not be removed:
    ```bash
    ls -d /tmp/gen_gmsl_dts /tmp/gmsl_* /tmp/gmsl_camera_state.json /tmp/gmsl_rpi_boot \
-     /tmp/gmsl_rpi_rootfs /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs <kernel_src_path> 2>/dev/null
+     /tmp/gmsl_rpi_rootfs /tmp/gmsl_nxp_boot /tmp/gmsl_nxp_rootfs 2>/dev/null
    ```
+   Add `<kernel_src_path>` to that list when step 4 or step 5 deleted it (a tree outside
+   `<work_dir>`, or one this run created inside it); a tree that existed before the run stays and
+   is not checked.
    The command must print nothing (except a kept "No, abort" image, the `/tmp/gmsl_*` entries
    older than `run_started` that step 6 kept, and, in a verbose run, `/tmp/gmsl_pw_*` and
    `/tmp/gmsl_askpass` until §Verbose mode §Package step 6). If entries of `<work_dir>`
    were deleted, `ls -d <work_dir>/<entry> 2>/dev/null` must print nothing for each of them (and
    `ls -d <work_dir>` too when the run created the folder and it was removed); the same for
    `<uuu_win_dir>` if it was deleted.
-8. **Verbose only:** §Verbose mode §Package steps 2–6 (summary, transcript, passwords
+8. **Verbose only:** §Verbose mode §Package steps 2–6 (transcript, summary, passwords
    removed, ZIP checked, run folder deleted). The state file is already gone: use the values
    noted before step 6.
 
@@ -776,7 +832,7 @@ After §Cleanup, tell the user, in a few short sections:
      nxp/0, and the boot-mode switch position (and how to set it back to eMMC boot).
    - Host (NXP eMMC flash): the udev rule `/etc/udev/rules.d/70-uuu.rules` if nxp/4 wrote it
      (`uuu_udev_rule`; undo: `sudo rm /etc/udev/rules.d/70-uuu.rules && sudo udevadm control --reload`), and the
-     Windows-side uuu folder if the user kept it in §Cleanup step 5a (its path).
+     Windows-side uuu folder only if §Cleanup step 5a could not delete it (its path).
    - Generic: per install method (runtime overlay: gone at the next reboot, or
      `rmdir /sys/kernel/config/device-tree/overlays/gmsl`; extlinux `gmsl` label: put the original
      `DEFAULT` back; U-Boot `fdtfile`: as for NXP), modules in `updates/`, tools; generic/2 §Final
@@ -784,15 +840,15 @@ After §Cleanup, tell the user, in a few short sections:
    - The viewer still running and how to stop it (common/8: `pkill -x gst-launch-1.0`, or closing
      the qv4l2 window), plus what the viewer section says the user has to do on the board.
    - Any retry workaround installed (common/6 §Retry workaround), marked as a workaround.
-3. **Artifacts:** where everything kept is: `<work_dir>` (what this run added to it, kept or
-   deleted: kernel/U-Boot trees, built modules, DTBs, env image, toolchain; what was there before
-   the run is untouched), the generic artifacts package
+3. **Artifacts:** where everything kept is: `<work_dir>` (what this run added to it and
+   deleted in §Cleanup step 5, with the sizes: kernel/U-Boot trees, built modules, DTBs, env
+   image, toolchain; what was there before the run is untouched), the generic artifacts package
    (generic/2), backups (U-Boot environment), a kept "No, abort" image, and the user's NXP download
    (untouched).
 4. **Verbose only:** the full path of the ZIP `<run_dir>.zip` (§Verbose mode §Package), what it
    contains (activity log, `choices.json`, board diagnostics, generated device tree files and
    scripts, build logs and driver patches, session transcript), that passwords were replaced by
-   `****`, and that it can be shared to report a problem. If the transcript was not found, the
+   `<password>`, and that it can be shared to report a problem. If the transcript was not found, the
    `/export` hint.
 
 ## Troubleshooting

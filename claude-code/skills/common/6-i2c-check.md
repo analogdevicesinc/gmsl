@@ -9,7 +9,7 @@ stream start (last row of §Results) do not show in idle tests.
 
 Why back to back: kernel drivers send register accesses back to back, microseconds apart; single
 `i2ctransfer` calls are milliseconds apart and hide timing problems. `i2cburst.c`
-(`<skill dir>/common/i2cburst.c`) alternates same-value writes and reads of one register, back to
+(`<skill dir>/tools/i2cburst.c`) alternates same-value writes and reads of one register, back to
 back, and counts errors; it only writes the value it just read.
 
 **Verbose runs** (`verbosity` = `verbose`): log as in the orchestrator's §Verbose mode §Logging rules, and save each `i2cburst` output as `<run_dir>/board/i2cburst_<n>.txt`, and the retry counters if the workaround is used (§Verbose mode §What to save).
@@ -19,9 +19,9 @@ back, and counts errors; it only writes the value it just read.
 Compile `i2cburst` on the board if it has `gcc`, and run it on the deserializer, the serializer
 (through the link) and the sensor:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p ~/Workspace"
-scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <skill dir>/common/i2cburst.c <user>@<ip>:Workspace/
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace && gcc -O2 -o i2cburst i2cburst.c && \
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "mkdir -p ~/Workspace"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <skill dir>/tools/i2cburst.c <user>@<ip>:Workspace/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "cd ~/Workspace && gcc -O2 -o i2cburst i2cburst.c && \
   timeout 60 ./i2cburst <i2c_bus> <des_addr> <des_reg> 2000; timeout 60 ./i2cburst <ser_bus> <ser_addr> <ser_reg> 2000"
 ```
 
@@ -29,10 +29,10 @@ ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace && gcc
 the host as a static binary (no dependency on the board's C library) and copy only the binary:
 ```bash
 mkdir -p /tmp/gmsl_i2cburst
-aarch64-linux-gnu-gcc -static -O2 -o /tmp/gmsl_i2cburst/i2cburst <skill dir>/common/i2cburst.c
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p ~/Workspace"
-scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gmsl_i2cburst/i2cburst <user>@<ip>:Workspace/
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace && chmod +x i2cburst && \
+aarch64-linux-gnu-gcc -static -O2 -o /tmp/gmsl_i2cburst/i2cburst <skill dir>/tools/i2cburst.c
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "mkdir -p ~/Workspace"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null /tmp/gmsl_i2cburst/i2cburst <user>@<ip>:Workspace/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "cd ~/Workspace && chmod +x i2cburst && \
   timeout 60 ./i2cburst <i2c_bus> <des_addr> <des_reg> 2000; timeout 60 ./i2cburst <ser_bus> <ser_addr> <ser_reg> 2000"
 ```
 (`aarch64-linux-gnu-gcc` is in the host tools of common/0 §Host tools, package
@@ -40,9 +40,10 @@ ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd ~/Workspace && chm
 `toolchain_prefix` in `<state>`.)
 
 Arguments: `i2cburst <bus> <addr> <reg16> <count> [gap_us]`.
-- `<i2c_bus>`: the number of the camera I2C bus (`i2cdetect -l`); `<ser_bus>`/`<sensor bus>`: the
+- `<i2c_bus>`: the number of the camera I2C bus (`PATH=\$PATH:/usr/sbin:/sbin i2cdetect -l` on
+  the board, as in common/3 §I2C probe); `<ser_bus>`/`<sensor bus>`: the
   bus the serializer or sensor appears on once the drivers are bound (the deserializer's I2C ATR
-  creates one adapter per link: find it with `i2cdetect -l` and
+  creates one adapter per link: find it with the same `i2cdetect -l` and
   `ls /sys/bus/i2c/devices/`), with the address the device has there.
 - Registers without side effects (read, then written back with the same value):
 
@@ -61,7 +62,7 @@ Arguments: `i2cburst <bus> <addr> <reg16> <count> [gap_us]`.
   `echo on > /sys/bus/i2c/devices/<sensor dev>/power/control` (with sudo), run the test, and set
   it back to `auto` after:
   ```bash
-  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo on > /sys/bus/i2c/devices/<sensor dev>/power/control'; cd ~/Workspace && timeout 60 ./i2cburst <sensor_bus> <sensor_addr> 0x0000 2000; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo auto > /sys/bus/i2c/devices/<sensor dev>/power/control'"
+  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo on > /sys/bus/i2c/devices/<sensor dev>/power/control'; cd ~/Workspace && timeout 60 ./i2cburst <sensor_bus> <sensor_addr> 0x0000 2000; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo auto > /sys/bus/i2c/devices/<sensor dev>/power/control'"
   ```
 - `i2cburst` uses `I2C_RDWR`, which works while the drivers are bound (unlike `i2ctransfer`
   without `-f`).
@@ -90,7 +91,7 @@ Only for the last row of §Results, and only after the user agrees (AskUserQuest
 fail, the drivers only repeat them; the cause (seen with a logic analyzer on SCL/SDA) still needs
 fixing in hardware or timing. Record the answer, so the final message lists it as a workaround.
 
-`<skill dir>/common/i2c_retry_regmap.h` is a reference implementation: a regmap without a bus,
+`<skill dir>/tools/i2c_retry_regmap.h` is a reference implementation: a regmap without a bus,
 whose `reg_read`/`reg_write` retry a transfer that times out or is not acknowledged
 (`I2C_RETRY_COUNT`, default 1 retry, 1–2 ms apart), for devices with 16-bit registers and 8-bit
 values (the ADI serializers/deserializers and most CCI sensors). It needs the driver sources, so it
@@ -120,7 +121,7 @@ Recoveries are logged: every failure and every recovery prints an `i2c-retry:` l
 (adapter, address, register, and the running count of recovered transfers per driver). Report how
 many per boot and per stream start:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "dmesg | grep -c 'i2c-retry:.*OK after'; dmesg | grep 'i2c-retry:' | tail -5"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "dmesg | grep -c 'i2c-retry:.*OK after'; dmesg | grep 'i2c-retry:' | tail -5"
 ```
 If transfers still fail after the retry (a `failed` line without a following `OK after`), the
 workaround is not enough: say so and stop at the frame check's result. One exception: during

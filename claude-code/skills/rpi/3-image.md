@@ -395,18 +395,22 @@ that they should delete it with `rm <work_dir>/${IMG_NAME}` once they have flash
 
 ## Step 8: Clean up
 
-The image is not needed after flashing: rpi/4 builds the overlay from templates it downloads
-itself. Remove it and the mount points:
+The image stays in `<work_dir>` until the end of the run (rpi/4 does not need it: it builds the
+overlay from templates it downloads itself); the orchestrator's §Cleanup step 5 deletes it with
+the other entries this run created. Rename it with a `-gmsl` suffix, so that Step 1b of a later
+run never takes this prepared image for the stock one (if a run stops before its cleanup), and
+remove the mount points:
 ```bash
-rm -f "<work_dir>/${IMG_NAME}" "<work_dir>/${IMG_FILE}"
+mv "<work_dir>/${IMG_NAME}" "<work_dir>/${IMG_NAME%.img}-gmsl.img"
 SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A rm -rf /tmp/gmsl_rpi_boot /tmp/gmsl_rpi_rootfs
-ls -d "<work_dir>/${IMG_NAME}" "<work_dir>/${IMG_FILE}" /tmp/gmsl_rpi_boot /tmp/gmsl_rpi_rootfs 2>/dev/null
+ls -d "<work_dir>/${IMG_NAME}" /tmp/gmsl_rpi_boot /tmp/gmsl_rpi_rootfs 2>/dev/null
+ls -l "<work_dir>/${IMG_NAME%.img}-gmsl.img"
 ```
-The last command must print nothing. The temporary files of Steps 4–5 (`/tmp/gmsl_userconf.txt`,
+The third command must print nothing; the fourth shows the image (6–7 GB). The temporary files of Steps 4–5 (`/tmp/gmsl_userconf.txt`,
 `/tmp/gmsl_video_cfg.sh`, `/tmp/gmsl_first_boot.*`) were already removed in those steps.
 
-The kernel tree `<kernel_src_path>` stays in `<work_dir>`: the orchestrator's §Cleanup asks at the
-end whether to keep `<work_dir>`. `sudo make modules_install` may have left root-owned files in
+The kernel tree `<kernel_src_path>` stays in `<work_dir>` until the orchestrator's §Cleanup
+deletes it at the end of the run. `sudo make modules_install` may have left root-owned files in
 it; give them back to the current user now, while the sudo password is still in `<state>`, so the
 tree can be removed later without sudo:
 ```bash

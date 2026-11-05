@@ -6,6 +6,9 @@ S() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -x /tmp/gmsl_askpass ]; then SUDO
 h() { echo; echo "=== $1"; }
 K=/lib/modules/$(uname -r)
 DT=/proc/device-tree
+# i2cdetect, modinfo, depmod and the like live in /usr/sbin or /sbin, which a normal user's
+# non-interactive SSH session does not have on its PATH (Raspberry Pi OS, Debian).
+PATH=$PATH:/usr/sbin:/sbin; export PATH
 
 h identity
 echo "model: $(tr -d '\0' < $DT/model 2>/dev/null)"

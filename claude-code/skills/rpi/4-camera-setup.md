@@ -10,7 +10,7 @@ common/3 (hardware questions, I2C probe, driver check; the orchestrator runs it 
 §Hardware choices and §Drivers, and its driver check is the only driver question). Placeholders (`<ip>`, `<user>`, `<pw>`, `<board_home>`, `<tpl_dir>` =
 `/tmp/gen_gmsl_dts/rpi`, `<state>`) are the orchestrator's (SKILL.md §Placeholders). All commands
 on the board go through the control socket of common/5 §Control socket:
-`ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "<cmd>"`, and sudo on the board is
+`ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "<cmd>"`, and sudo on the board is
 `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '<cmd>'`.
 
 ## Order
@@ -28,10 +28,11 @@ continue below.
 3. §Install device tree (below).
 4. common/5 §Reboot, §Probe check and §Camera port check (the RPi 5 has a second camera port:
    with "Not sure" in §Hardware choices, switch from CAM0 to CAM1 and deploy again from step 1;
-   the camera I2C bus for `i2cdetect` is in §Troubleshooting). If common/3 §I2C probe and §Path
-   check were skipped because the camera bus did not exist yet, run them now: with the drivers
-   bound the deserializer shows `UU`, and §Path check is then skipped as it says.
-5. §Tools (it installs `i2c-tools` for step 6 if missing).
+   the camera I2C bus for `i2cdetect` is in §Troubleshooting).
+5. §Tools (it installs `i2c-tools` if missing, needed by step 5a and step 6).
+5a. If common/3 §I2C probe and §Path check were skipped because the camera bus did not exist
+   yet, run them now: with the drivers bound the deserializer shows `UU`, and §Path check is then
+   skipped as it says.
 6. Read `<skill dir>/common/6-i2c-check.md` and follow §Run and §Results (always, as common/6
    says, before the pipeline is configured), and, only with the user's agreement, §Retry
    workaround (on a Raspberry Pi the retry patch needs the kernel build path, rpi/0–3). ADI's
@@ -135,29 +136,35 @@ Example (RPi 5, CAM0, MAX96716A, one MAX96717 + IMX219):
 ```
 
 ## Install device tree
+Install the overlay and enable it without asking (orchestrator §Rules: the exception for this
+change). Afterwards, tell the user the change and the recovery: `<overlays_dir>/gmsl.dtbo` added,
+`dtoverlay=gmsl` appended at the end of `<config_path>`, no other line changed; to undo, delete
+both and reboot, or, if the Pi does not boot, remove the line from `config.txt` on the card's
+boot partition from a PC.
+
 First check whether the boot files are in `/boot/firmware` or directly in `/boot`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "test -d /boot/firmware/overlays && echo fw || echo boot"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "test -d /boot/firmware/overlays && echo fw || echo boot"
 ```
 - `fw`: overlays dir is `/boot/firmware/overlays/`, config path is `/boot/firmware/config.txt`
 - `boot`: overlays dir is `/boot/overlays/`, config path is `/boot/config.txt`
 
 Copy the overlay to the detected overlays dir:
 ```bash
-scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gen_gmsl_dts/gmsl.dtbo <user>@<ip>:<board_home>/gmsl.dtbo
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cp <board_home>/gmsl.dtbo <overlays_dir>/"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "rm -f <board_home>/gmsl.dtbo"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null /tmp/gen_gmsl_dts/gmsl.dtbo <user>@<ip>:<board_home>/gmsl.dtbo
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cp <board_home>/gmsl.dtbo <overlays_dir>/"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "rm -f <board_home>/gmsl.dtbo"
 ```
 
 Enable it in the boot config:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sed -i '/^dtoverlay=gmsl/d' <config_path>"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo dtoverlay=gmsl >> <config_path>'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sed -i '/^dtoverlay=gmsl/d' <config_path>"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'echo dtoverlay=gmsl >> <config_path>'"
 ```
 Then look for camera overlays that can claim the same CSI port (`camera_auto_detect=1`, which
 the ADI GMSL images use, does not conflict and is not checked):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "grep -nE '^[[:space:]]*dtoverlay=(imx|ov|arducam|isx)' <config_path>"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "grep -nE '^[[:space:]]*dtoverlay=(imx|ov|arducam|isx)' <config_path>"
 ```
 If anything is found, tell the user that it may conflict with the GMSL overlay and use
 AskUserQuestion (header: "Camera cfg"): **Comment them out (Recommended)** (prefix the lines with
@@ -182,22 +189,22 @@ tools. Installing needs Internet access on the board.
 First make sure the basic tools are present (images other than the ADI GMSL images may not
 have them):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "which git pip3 >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y git python3-pip)"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "which v4l2-ctl media-ctl >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y v4l-utils)"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "which i2cdetect >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y i2c-tools)"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "which git pip3 >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y git python3-pip)"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "which v4l2-ctl media-ctl >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y v4l-utils)"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "PATH=\$PATH:/usr/sbin:/sbin which i2cdetect >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y i2c-tools)"
 ```
 
 Check if pyv4l2 and video_cfg.sh are already on the board (included in the ADI GMSL images and in
 the SD card of rpi/3):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "test -d <board_home>/Workspace/pyv4l2 && echo ok || echo missing"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "test -f <board_home>/Workspace/video_cfg.sh && echo found || echo missing"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "test -d <board_home>/Workspace/pyv4l2 && echo ok || echo missing"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "test -f <board_home>/Workspace/video_cfg.sh && echo found || echo missing"
 ```
 
 On a freshly flashed card, the first-boot service of rpi/3 may still be installing; check it
 before installing anything by hand:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "systemctl is-active gmsl-first-boot.service 2>/dev/null"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "systemctl is-active gmsl-first-boot.service 2>/dev/null"
 ```
 If it prints `activating`, wait (poll every 15 s, up to 10 minutes) until it is no longer active.
 If it is `failed`, note it (`journalctl -u gmsl-first-boot.service | tail -20` for the reason) and
@@ -207,24 +214,24 @@ wait up to 5 minutes): with the image's old date, HTTPS fails with a certificate
 
 If pyv4l2 is missing, clone it:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p <board_home>/Workspace && git clone --branch gmsl https://github.com/iristeiu06/pyv4l2 <board_home>/Workspace/pyv4l2"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A chown -R <user>:<user> <board_home>/Workspace/pyv4l2"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "mkdir -p <board_home>/Workspace && git clone --branch gmsl https://github.com/iristeiu06/pyv4l2 <board_home>/Workspace/pyv4l2"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A chown -R <user>:<user> <board_home>/Workspace/pyv4l2"
 ```
 
 Then make sure it is installed as a Python package. Check the import, not the folder: the
 folder can be present while the package is not installed (for example when the first-boot
 service of rpi/3 had no internet access):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "python3 -c 'import v4l2' 2>/dev/null || (cd <board_home>/Workspace/pyv4l2 && pip3 install --break-system-packages -e .)"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "python3 -c 'import v4l2' 2>/dev/null || (cd <board_home>/Workspace/pyv4l2 && pip3 install --break-system-packages -e .)"
 ```
 
 Then install any missing dependencies (qv4l2 for the first viewer, pixutils and pykms for
 cam.py; the GStreamer packages of the fallback viewer are installed by common/8 §GStreamer only
 when needed):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "which qv4l2 >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y qv4l2)"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "python3 -c 'import pixutils' 2>/dev/null || pip3 install --break-system-packages git+https://github.com/tomba/pixutils.git"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "python3 -c 'import kms' 2>/dev/null || pip3 install --break-system-packages git+https://github.com/tomba/pykms.git"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "which qv4l2 >/dev/null 2>&1 || (SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y qv4l2)"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "python3 -c 'import pixutils' 2>/dev/null || pip3 install --break-system-packages git+https://github.com/tomba/pixutils.git"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "python3 -c 'import kms' 2>/dev/null || pip3 install --break-system-packages git+https://github.com/tomba/pykms.git"
 ```
 If the qv4l2 install fails (no Internet, package not found), note it and continue: §Viewer then
 uses the GStreamer fallback.
@@ -240,23 +247,23 @@ If video_cfg.sh is missing, create it from the ADI repository. Download it on th
 it to the board (the board may not have internet access):
 ```bash
 curl -sL -o /tmp/gen_gmsl_dts/video_cfg.sh https://raw.githubusercontent.com/analogdevicesinc/gmsl/tools/rpi/video_cfg.sh
-scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gen_gmsl_dts/video_cfg.sh <user>@<ip>:<board_home>/Workspace/video_cfg.sh
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "chmod +x <board_home>/Workspace/video_cfg.sh"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null /tmp/gen_gmsl_dts/video_cfg.sh <user>@<ip>:<board_home>/Workspace/video_cfg.sh
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "chmod +x <board_home>/Workspace/video_cfg.sh"
 ```
 
 Then check whether cam.py is in `pyv4l2/utils/cam/` or directly in `pyv4l2/utils/`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "test -f <board_home>/Workspace/pyv4l2/utils/cam/cam.py && echo cam || echo utils"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "test -f <board_home>/Workspace/pyv4l2/utils/cam/cam.py && echo cam || echo utils"
 ```
 If it is `cam`, make video_cfg.sh call cam.py from the `cam` folder (no change if already correct):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "sed -i 's#/utils/cam\.py#/utils/cam/cam.py#' <board_home>/Workspace/video_cfg.sh"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "sed -i 's#/utils/cam\.py#/utils/cam/cam.py#' <board_home>/Workspace/video_cfg.sh"
 ```
 
 If video_cfg.sh has a hard-coded pyv4l2 path for another user (e.g. `/home/analog/...`), point it
 to the current user's home (no change if the script already derives the path itself):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "sed -i 's#^PYV4L2_PATH=\"/home/[^/]*/#PYV4L2_PATH=\"<board_home>/#' <board_home>/Workspace/video_cfg.sh"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "sed -i 's#^PYV4L2_PATH=\"/home/[^/]*/#PYV4L2_PATH=\"<board_home>/#' <board_home>/Workspace/video_cfg.sh"
 ```
 
 ## Configure pipeline
@@ -279,9 +286,9 @@ The camera list specifies which GMSL link ports to configure (e.g., `cam0`, `cam
 
 Update `video_cfg.sh` variables and run:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "sed -i 's/^CAM_LIST=.*/CAM_LIST=\"<cam_list>\"/' <board_home>/Workspace/video_cfg.sh"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "sed -i 's/^CAM_MODEL=.*/CAM_MODEL=\"<model>\"/' <board_home>/Workspace/video_cfg.sh"
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "cd <board_home>/Workspace && ./video_cfg.sh"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "sed -i 's/^CAM_LIST=.*/CAM_LIST=\"<cam_list>\"/' <board_home>/Workspace/video_cfg.sh"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "sed -i 's/^CAM_MODEL=.*/CAM_MODEL=\"<model>\"/' <board_home>/Workspace/video_cfg.sh"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "cd <board_home>/Workspace && ./video_cfg.sh"
 ```
 
 Where:
@@ -298,10 +305,16 @@ If cameras use different sensor models, repeat sed+run for each model group:
 The script prints one dictionary per camera, with its video device (`dev_path`, e.g.
 `/dev/video0`) and its format (`w`, `h`, `format`, e.g. 640x480 `SRGGB10P`).
 
-Save what it configured, for §Viewer (`-p` prints routes, formats and links):
+Save what it configured, for §Viewer (`-p` prints routes, formats and links). The camera
+receiver is not always `/dev/media0`: the numbering of the media devices (`rp1-cfe` or
+`unicam`, the ISP `pispbe`, the codecs) can change from one boot to the next. Find the
+receiver's device by its driver name, and use it as `<media dev>` in every later `media-ctl`
+command:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "media-ctl -p" > /tmp/gen_gmsl_dts/media_topology.txt
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "for m in /dev/media*; do media-ctl -d \$m -p 2>/dev/null | grep -qE '^driver +(rp1-cfe|unicam)' && echo \$m; done"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "media-ctl -d <media dev> -p" > /tmp/gen_gmsl_dts/media_topology.txt
 ```
+The first command must print exactly one device.
 
 **Fallback for sensors without a cam.py profile** (IMX708, ISX021, or `video_cfg.sh` fails with
 `profile not found` / a `KeyError` for the config name): read
@@ -310,13 +323,14 @@ ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "media-ctl -p" > /tmp/
 - RPi 5 (`rp1-cfe`, upstream streams-capable driver of rpi/2): the `csi2` subdev has the sink pad
   0 and the source pads 1–4, one per channel, each linked to a video node (named like
   `rp1-cfe-csi2-ch0` … `ch3`; the names differ between driver versions, take the exact entity
-  names from `media-ctl -p`). Route camera `k`'s sink stream to its
+  names from `media-ctl -d <media dev> -p`). Route camera `k`'s sink stream to its
   own channel (`0/<k> -> <1+k>/0 [1]`), enable the link from that source pad to its video node
-  (`media-ctl -l '"csi2":<1+k> -> "<video entity>":0[1]'`), and set the formats on both pads.
+  (`media-ctl -d <media dev> -l '"csi2":<1+k> -> "<video entity>":0[1]'`), and set the formats on both pads.
 - RPi 4 (`unicam`): one image source pad; route only one camera (`0/0 -> 1/0 [1]`) and start with
   one camera.
 - Use the cam.py profile of a supported sensor as the model: `video_cfg.sh` for IMX219 on the same
-  board shows which links and routes cam.py enables on the receiver (`media-ctl -p` after it ran).
+  board shows which links and routes cam.py enables on the receiver (`media-ctl -d <media dev> -p`
+  after it ran).
 - Video node format: `v4l2-ctl --list-formats` on the node; for 10-bit Bayer the CFE offers packed
   (`pRAA` = `SRGGB10P`) and unpacked 16-bit formats.
 
@@ -348,9 +362,9 @@ not launch a viewer: the frame check shows whether the pipeline works.
      `<board_home>/Workspace/media_cfg_view.sh` (common/7 §media_cfg.sh: `#!/bin/sh`, `set -e`, a
      comment with the configuration) with one `media-ctl -d <media dev> -V
      '"<entity>":<pad>[/<stream>] [fmt:SRGGB8_1X8/640x480 field:none]'` per pad/stream (use the
-     sensor's own 8-bit Bayer order from `media-ctl -p`, e.g. `SRGGB8_1X8` for IMX219) and
+     sensor's own 8-bit Bayer order from `media_topology.txt`, e.g. `SRGGB8_1X8` for IMX219) and
      `v4l2-ctl -d <dev_path> --set-fmt-video=width=640,height=480,pixelformat=RGGB`. Run it, check
-     with `media-ctl -p` (common/7 §Check) that every pad of the chain shows the same code, size and
+     with `media-ctl -d <media dev> -p` (common/7 §Check) that every pad of the chain shows the same code, size and
      `field:none`, and run common/8 §Frame check once more (640 * 480 = 307200 bytes per frame).
    - YUV sensors (OV5640): keep the `video_cfg.sh` format; common/8 §GStreamer uses `videoconvert`
      for them.

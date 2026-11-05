@@ -203,7 +203,7 @@ Follow common/4 §Merged DTB with `<base_dtb>` = `imx95-19x19-frdm-pro.dtb` and 
   `/run/media/boot-mmcblk0p1` on eMMC boot (the SD card's first partition, e.g.
   `/run/media/boot-mmcblk1p1`, on SD boot). Find it:
   ```bash
-  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "findmnt -rn -t vfat -o SOURCE,TARGET; ls -l /run/media/*/imx95*.dtb 2>/dev/null"
+  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "findmnt -rn -t vfat -o SOURCE,TARGET; ls -l /run/media/*/imx95*.dtb 2>/dev/null"
   ```
   `<boot dir>` is the mount of the boot device's first partition (the root device of the kernel
   command line, `root=/dev/mmcblk0p2` → `mmcblk0p1`). Check that `<base_dtb>` is the DTB the board

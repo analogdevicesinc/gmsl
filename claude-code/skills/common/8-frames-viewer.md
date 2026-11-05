@@ -16,7 +16,7 @@ its format (width, height, fourcc).
 Before launching the viewer, capture a few frames on each configured video device. This works
 without a monitor, and tells a pipeline problem apart from a display problem:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "v4l2-ctl -d <dev_path> --get-fmt-video | grep -E 'Width|Pixel Format|Size Image'; timeout 20 v4l2-ctl -d <dev_path> --stream-mmap=4 --stream-count=30 --stream-to=/tmp/gmsl_test.raw; ls -l /tmp/gmsl_test.raw"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "v4l2-ctl -d <dev_path> --get-fmt-video | grep -E 'Width|Pixel Format|Size Image'; timeout 20 v4l2-ctl -d <dev_path> --stream-mmap=4 --stream-count=30 --stream-to=/tmp/gmsl_test.raw; ls -l /tmp/gmsl_test.raw"
 ```
 v4l2-ctl prints one `<` per frame. **First the file size**: 30 frames of `Size Image` bytes
 (from `--get-fmt-video`) is a pass. Examples: 640x480 `SRGGB10P` (packed RAW10) is
@@ -31,7 +31,7 @@ last frame of the file, with `<layout>` = `8` for 8-bit formats (`RGGB`, `SRGGB8
 (2 pixels in 3 bytes); `<stride>` = `Bytes per Line`. For packed formats the check reads the high
 8 bits of each pixel, which is enough to see whether it has data:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "python3 - /tmp/gmsl_test.raw <w> <h> <layout> <stride> <Size Image>" <<'EOF'
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "python3 - /tmp/gmsl_test.raw <w> <h> <layout> <stride> <Size Image>" <<'EOF'
 import os, sys
 path, w, h, layout = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
 stride, size = int(sys.argv[5]), int(sys.argv[6])
@@ -48,7 +48,7 @@ vals = [val(y * stride + off(x)) for y in range(0, h, max(1, h // 32)) for x in 
 ok = rows >= 0.9 * h and cols >= 0.5 * w
 print(f'rows with data {rows}/{h}, columns with data {cols}/{w}, min {min(vals)}, max {max(vals)}: {"PASS" if ok else "FAIL"}')
 EOF
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "rm -f /tmp/gmsl_test.raw"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "rm -f /tmp/gmsl_test.raw"
 ```
 It must print `PASS`. The column limit is half the width because a scene or a test pattern can be
 black at the right edge (the IMX219's last colour bar is 0), while a 3:1 squeeze leaves only a
@@ -65,7 +65,7 @@ each (1080p: 240 px; on the broken i.MX93 they were 80 px, in the left third); s
 yellow, cyan, green, magenta, red, blue, black only **blue** changes at every bar (red every second,
 green once), so for `RGGB` take the odd columns of an odd row:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "python3 - /tmp/gmsl_test.raw <w> <h> <shift>" <<'EOF'
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "python3 - /tmp/gmsl_test.raw <w> <h> <shift>" <<'EOF'
 import sys
 p, w, h, sh = sys.argv[1], *map(int, sys.argv[2:])
 d = open(p, 'rb').read()[-w * h * 2:]; y = h // 2 | 1
@@ -97,7 +97,7 @@ Run this check before the viewer starts, because the viewer keeps the video devi
 
 The viewer needs a desktop session on the board. Check that one is running:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "pgrep -x 'Xorg|Xwayland|labwc|wayfire|weston|gnome-shell' >/dev/null && echo desktop || echo none"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "pgrep -x 'Xorg|Xwayland|labwc|wayfire|weston|gnome-shell' >/dev/null && echo desktop || echo none"
 ```
 If it prints `none` (for example a Lite/server image, or no monitor connected at boot), do not
 launch a viewer: tell the user that the video can only be shown on a desktop session on the
@@ -105,7 +105,7 @@ board, and that the frame check shows whether the video pipeline works.
 
 Find out which display servers run (for §GStreamer's sink):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "ls /run/user/\$(id -u)/wayland-* 2>/dev/null; pgrep -a -x 'Xorg|Xwayland' | head -3"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "ls /run/user/\$(id -u)/wayland-* 2>/dev/null; pgrep -a -x 'Xorg|Xwayland' | head -3"
 ```
 A `wayland-0` socket means a Wayland session; `Xorg` without a Wayland socket means X11 only. The
 Wayland socket belongs to the user that runs the desktop: if it is not in the login's
@@ -118,8 +118,8 @@ which use X11 with startx; and Raspberry Pi OS Trixie with labwc, where Xwayland
 the first X11 client connects, so nothing is found before qv4l2 starts, and it then uses
 `~/.Xauthority`: checked on a Pi 5, October 2026):
 ```bash
-XAUTH=$(ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "grep -z XAUTHORITY /proc/\$(pgrep Xwayland | head -1)/environ 2>/dev/null | tr -d '\0' | cut -d= -f2-")
-[ -z "$XAUTH" ] && XAUTH=$(ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "pgrep -a -x Xorg | grep -o -- '-auth [^ ]*' | head -1 | cut -d' ' -f2")
+XAUTH=$(ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "grep -z XAUTHORITY /proc/\$(pgrep Xwayland | head -1)/environ 2>/dev/null | tr -d '\0' | cut -d= -f2-")
+[ -z "$XAUTH" ] && XAUTH=$(ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "pgrep -a -x Xorg | grep -o -- '-auth [^ ]*' | head -1 | cut -d' ' -f2")
 [ -z "$XAUTH" ] && XAUTH="<board_home>/.Xauthority"
 ```
 (`<board_home>`: the login's home from `<state>`, `echo $HOME` on the board.)
@@ -133,18 +133,18 @@ and `qv4l2` is installed: vendor images often lack it and cannot build it (it ne
 Check that it is installed (the platform file's **Tools** installs it, e.g. `apt-get install -y
 qv4l2` on Raspberry Pi OS):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "which qv4l2 >/dev/null 2>&1 && echo found || echo missing"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "which qv4l2 >/dev/null 2>&1 && echo found || echo missing"
 ```
 
 Launch it on the board's display, with `$XAUTH` from §Desktop session:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "DISPLAY=:0 XAUTHORITY=$XAUTH XDG_RUNTIME_DIR=/run/user/\$(id -u) nohup qv4l2 > /dev/null 2>&1 &"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "DISPLAY=:0 XAUTHORITY=$XAUTH XDG_RUNTIME_DIR=/run/user/\$(id -u) nohup qv4l2 > /dev/null 2>&1 &"
 ```
 
 Verify qv4l2 actually started:
 ```bash
 sleep 2
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "pgrep qv4l2 && echo 'qv4l2 running' || echo 'qv4l2 FAILED to start'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "pgrep qv4l2 && echo 'qv4l2 running' || echo 'qv4l2 FAILED to start'"
 ```
 If qv4l2 failed to start, check the XAUTHORITY path and retry once. If it still fails, does not
 appear on the display, or the user reports no image, use the platform's fallback (RPi: §GStreamer,
@@ -163,13 +163,13 @@ The viewer of NXP and generic boards, and the RPi fallback. It needs GStreamer w
 
 1. **Check the elements:**
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "which gst-launch-1.0; gst-inspect-1.0 bayer2rgb >/dev/null 2>&1 && echo bayer2rgb; gst-inspect-1.0 waylandsink >/dev/null 2>&1 && echo waylandsink; gst-inspect-1.0 ximagesink >/dev/null 2>&1 && echo ximagesink; gst-inspect-1.0 videoconvert >/dev/null 2>&1 && echo videoconvert"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "which gst-launch-1.0; gst-inspect-1.0 bayer2rgb >/dev/null 2>&1 && echo bayer2rgb; gst-inspect-1.0 waylandsink >/dev/null 2>&1 && echo waylandsink; gst-inspect-1.0 ximagesink >/dev/null 2>&1 && echo ximagesink; gst-inspect-1.0 videoconvert >/dev/null 2>&1 && echo videoconvert"
    ```
    If `gst-launch-1.0` or `bayer2rgb` is missing, ask the user (header: "Install"), then install
    `gstreamer1.0-tools gstreamer1.0-plugins-bad` with the board's package manager (needs Internet
    access on the board):
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y gstreamer1.0-tools gstreamer1.0-plugins-bad"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get update && SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A apt-get install -y gstreamer1.0-tools gstreamer1.0-plugins-bad"
    ```
    (dnf/opkg: the distribution's names for the same packages; `bayer2rgb` is in plugins-bad.)
    Without a package manager or Internet access, skip the viewer and say why; the frame check
@@ -187,18 +187,18 @@ The viewer of NXP and generic boards, and the RPi fallback. It needs GStreamer w
 4. **Measure before showing it to the user:** the camera and conversion alone, then the display
    path:
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "timeout 15 gst-launch-1.0 -v v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|grbg|...>,width=<w>,height=<h> ! bayer2rgb ! video/x-raw,format=BGRx ! fpsdisplaysink video-sink=fakesink text-overlay=false sync=false 2>&1 | grep -o 'average: [0-9.]*' | tail -1"
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "export XDG_RUNTIME_DIR=/run/user/\$(id -u) WAYLAND_DISPLAY=wayland-0; timeout 15 gst-launch-1.0 -v v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|...>,width=<w>,height=<h> ! bayer2rgb ! video/x-raw,format=BGRx ! fpsdisplaysink video-sink=waylandsink text-overlay=false sync=false 2>&1 | grep -o 'average: [0-9.]*' | tail -1"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "timeout 15 gst-launch-1.0 -v v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|grbg|...>,width=<w>,height=<h> ! bayer2rgb ! video/x-raw,format=BGRx ! fpsdisplaysink video-sink=fakesink text-overlay=false sync=false 2>&1 | grep -o 'average: [0-9.]*' | tail -1"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "export XDG_RUNTIME_DIR=/run/user/\$(id -u) WAYLAND_DISPLAY=wayland-0; timeout 15 gst-launch-1.0 -v v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|...>,width=<w>,height=<h> ! bayer2rgb ! video/x-raw,format=BGRx ! fpsdisplaysink video-sink=waylandsink text-overlay=false sync=false 2>&1 | grep -o 'average: [0-9.]*' | tail -1"
    ```
    If the display rate is far below the camera rate, use a smaller mode.
 5. **Launch it in the background**, with the Wayland environment of the desktop session:
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "export XDG_RUNTIME_DIR=/run/user/\$(id -u) WAYLAND_DISPLAY=wayland-0; nohup gst-launch-1.0 v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|grbg|...>,width=<w>,height=<h> ! bayer2rgb ! video/x-raw,format=BGRx ! waylandsink sync=false > /tmp/gmsl_gst_view.log 2>&1 &"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "export XDG_RUNTIME_DIR=/run/user/\$(id -u) WAYLAND_DISPLAY=wayland-0; nohup gst-launch-1.0 v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|grbg|...>,width=<w>,height=<h> ! bayer2rgb ! video/x-raw,format=BGRx ! waylandsink sync=false > /tmp/gmsl_gst_view.log 2>&1 &"
    ```
    **When only X11 runs** (no Wayland socket, e.g. the ADI RPi images with startx): use
    `ximagesink` with `DISPLAY` and `$XAUTH` from §Desktop session:
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "DISPLAY=:0 XAUTHORITY=$XAUTH nohup gst-launch-1.0 v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|...>,width=<w>,height=<h> ! bayer2rgb ! videoconvert ! ximagesink sync=false > /tmp/gmsl_gst_view.log 2>&1 &"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "DISPLAY=:0 XAUTHORITY=$XAUTH nohup gst-launch-1.0 v4l2src device=<dev_path> ! video/x-bayer,format=<rggb|...>,width=<w>,height=<h> ! bayer2rgb ! videoconvert ! ximagesink sync=false > /tmp/gmsl_gst_view.log 2>&1 &"
    ```
    **YUV sensors** (`UYVY`/`YUYV`, e.g. OV5640): no `bayer2rgb`; convert with `videoconvert`:
    `v4l2src device=<dev_path> ! video/x-raw,format=UYVY,width=<w>,height=<h> ! videoconvert ! waylandsink sync=false`
@@ -206,7 +206,7 @@ The viewer of NXP and generic boards, and the RPi fallback. It needs GStreamer w
 6. **Verify** it runs and look at its log:
    ```bash
    sleep 3
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "pgrep -x gst-launch-1.0 && echo 'viewer running' || echo 'viewer FAILED'; tail -5 /tmp/gmsl_gst_view.log"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "pgrep -x gst-launch-1.0 && echo 'viewer running' || echo 'viewer FAILED'; tail -5 /tmp/gmsl_gst_view.log"
    ```
    Then ask the user whether the image shows on the board's display.
 

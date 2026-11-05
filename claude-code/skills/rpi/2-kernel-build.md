@@ -50,9 +50,11 @@ After generating `.config` from defconfig, apply the following adjustments.
 These are critical for the GMSL pipeline to work correctly.
 
 **Important**: `olddefconfig` must run FIRST, then config overrides are applied AFTER.
-Running `olddefconfig` after `scripts/config` reverts some values (e.g.,
-`CONFIG_VIDEO_MAXIM_SERDES` gets changed from `=y` back to `=m` due to Kconfig
-dependency resolution). Do NOT run `olddefconfig` again after setting overrides.
+Running `olddefconfig` between the overrides (4b, 4c) and the forcing of 4d reverts some values
+(e.g., `CONFIG_VIDEO_MAXIM_SERDES` gets changed from `=y` back to `=m` due to Kconfig
+dependency resolution). It runs once more only at the end of 4d, after the forcing, so that the
+build's own config sync (Step 5) finds no new options to ask about; the check after it must still
+show `=y` for every option.
 
 ### 4a. Resolve Kconfig dependencies first
 
@@ -75,10 +77,10 @@ cd <kernel_src_path>
 ./scripts/config --set-val CONFIG_MEDIA_SUPPORT y
 ./scripts/config --set-val CONFIG_VIDEO_DEV y
 ./scripts/config --set-val CONFIG_I2C_MUX y
-./scripts/config --set-val CONFIG_V4L2_SUBDEV_API y
+./scripts/config --set-val CONFIG_VIDEO_V4L2_SUBDEV_API y
 ./scripts/config --set-val CONFIG_V4L2_FWNODE y
 ./scripts/config --set-val CONFIG_V4L2_ASYNC y
-./scripts/config --set-val CONFIG_MC y
+./scripts/config --set-val CONFIG_MEDIA_CONTROLLER y
 ./scripts/config --set-val CONFIG_VIDEOBUF2_CORE y
 ./scripts/config --set-val CONFIG_VIDEOBUF2_V4L2 y
 ./scripts/config --set-val CONFIG_VIDEOBUF2_MEMOPS y
@@ -103,7 +105,9 @@ cd <kernel_src_path>
 # Kernel debugging: dynamic debug (pr_debug/dev_dbg of the GMSL drivers can be switched on at
 # run time through /sys/kernel/debug/dynamic_debug/control) and function tracing (ftrace).
 # DYNAMIC_FTRACE depends on FUNCTION_TRACER: without it, the build's own config sync turns
-# DYNAMIC_FTRACE off again. The stock RPi defconfigs set none of these.
+# DYNAMIC_FTRACE off again. bcm2712_defconfig of rpi-6.18.y already has FTRACE, FUNCTION_TRACER
+# and DYNAMIC_FTRACE (=y) and IKCONFIG_PROC (=y, with IKCONFIG=m); DYNAMIC_DEBUG is new, and
+# IKCONFIG goes from =m to =y. Older branches and bcm2711_defconfig can differ: set them all.
 ./scripts/config --set-val CONFIG_DYNAMIC_DEBUG y
 ./scripts/config --set-val CONFIG_FTRACE y
 ./scripts/config --set-val CONFIG_FUNCTION_TRACER y
@@ -120,13 +124,13 @@ cd <kernel_src_path>
 cd <kernel_src_path>
 # Disable downstream CSI receiver — it lacks V4L2_SUBDEV_FL_STREAMS and set_routing,
 # causing "Dangling sink streams" errors when the GMSL deserializer validates links.
-./scripts/config --set-val CONFIG_VIDEO_RP1_CFE_DOWNSTREAM n
+./scripts/config --disable CONFIG_VIDEO_RP1_CFE_DOWNSTREAM
 
 # Disable MODVERSIONS — the GPIO backport patches change symbol signatures (e.g.,
 # gpio_chip.set_rv), causing CRC mismatches at module load time. Since GMSL drivers
 # are built-in this mostly affects other modules, but disabling it prevents any
 # version mismatch errors.
-./scripts/config --set-val CONFIG_MODVERSIONS n
+./scripts/config --disable CONFIG_MODVERSIONS
 ```
 
 ### 4d. Verify and force critical config values
@@ -137,14 +141,15 @@ Verify and force with `sed` if needed:
 ```bash
 cd <kernel_src_path>
 # Check for any critical configs that are =m instead of =y
-for cfg in CONFIG_MEDIA_SUPPORT CONFIG_VIDEO_DEV CONFIG_I2C_MUX \
-           CONFIG_V4L2_SUBDEV_API CONFIG_V4L2_FWNODE CONFIG_V4L2_ASYNC \
-           CONFIG_MC CONFIG_VIDEOBUF2_CORE CONFIG_VIDEOBUF2_V4L2 \
-           CONFIG_VIDEOBUF2_MEMOPS CONFIG_VIDEOBUF2_DMA_CONTIG \
-           CONFIG_VIDEO_MAXIM_SERDES CONFIG_VIDEO_MAX9296A CONFIG_VIDEO_MAX96717 \
-           CONFIG_VIDEO_MAX96724 CONFIG_I2C_ATR CONFIG_VIDEO_IMX219 \
-           CONFIG_VIDEO_RP1_CFE CONFIG_DYNAMIC_DEBUG CONFIG_FTRACE \
-           CONFIG_FUNCTION_TRACER CONFIG_DYNAMIC_FTRACE CONFIG_IKCONFIG CONFIG_IKCONFIG_PROC; do
+CFGS="CONFIG_MEDIA_SUPPORT CONFIG_VIDEO_DEV CONFIG_I2C_MUX
+      CONFIG_VIDEO_V4L2_SUBDEV_API CONFIG_V4L2_FWNODE CONFIG_V4L2_ASYNC
+      CONFIG_MEDIA_CONTROLLER CONFIG_VIDEOBUF2_CORE CONFIG_VIDEOBUF2_V4L2
+      CONFIG_VIDEOBUF2_MEMOPS CONFIG_VIDEOBUF2_DMA_CONTIG
+      CONFIG_VIDEO_MAXIM_SERDES CONFIG_VIDEO_MAX9296A CONFIG_VIDEO_MAX96717
+      CONFIG_VIDEO_MAX96724 CONFIG_I2C_ATR CONFIG_VIDEO_IMX219
+      CONFIG_VIDEO_RP1_CFE CONFIG_DYNAMIC_DEBUG CONFIG_FTRACE
+      CONFIG_FUNCTION_TRACER CONFIG_DYNAMIC_FTRACE CONFIG_IKCONFIG CONFIG_IKCONFIG_PROC"
+for cfg in $CFGS; do
   val=$(grep "^${cfg}=" .config | cut -d= -f2)
   if [ "$val" = "m" ]; then
     echo "Forcing $cfg from =m to =y"
@@ -152,12 +157,21 @@ for cfg in CONFIG_MEDIA_SUPPORT CONFIG_VIDEO_DEV CONFIG_I2C_MUX \
   fi
 done
 
-grep -E 'CONFIG_VIDEO_MAXIM_SERDES|CONFIG_VIDEO_MAX9296A|CONFIG_VIDEO_MAX96717|CONFIG_VIDEO_MAX96724|CONFIG_I2C_ATR|CONFIG_VIDEO_IMX219|CONFIG_VIDEO_RP1_CFE|CONFIG_VIDEO_RP1_CFE_DOWNSTREAM|CONFIG_MODVERSIONS|CONFIG_DYNAMIC_DEBUG|CONFIG_FTRACE|CONFIG_FUNCTION_TRACER|CONFIG_DYNAMIC_FTRACE' .config
+# Give the options that the overrides made visible their defaults now. Without this, the build's
+# own config sync asks for them (FW_LOADER_DEBUG, TEST_DYNAMIC_DEBUG, ...), cannot read an answer,
+# prints "Error in reading or end of file." and takes the defaults anyway.
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+
+for cfg in $CFGS; do echo "$cfg=$(grep "^${cfg}=" .config | cut -d= -f2)"; done
+grep -E 'CONFIG_VIDEO_RP1_CFE_DOWNSTREAM|CONFIG_MODVERSIONS' .config
 ```
 
-Expected output should show `=y` for all GMSL/sensor/CSI configs and the four debugging options
-(`CONFIG_DYNAMIC_DEBUG`, `CONFIG_FTRACE`, `CONFIG_FUNCTION_TRACER`, `CONFIG_DYNAMIC_FTRACE`), `not set` for
-`CONFIG_VIDEO_RP1_CFE_DOWNSTREAM` and `CONFIG_MODVERSIONS`.
+Expected output: `=y` for every option of the list (all 24: media core, GMSL/sensor/CSI, the
+debugging options and IKCONFIG), and `not set` for `CONFIG_VIDEO_RP1_CFE_DOWNSTREAM` and
+`CONFIG_MODVERSIONS`. An empty value (`CONFIG_X=`) means the option does not exist in this
+kernel: stop and report it. If an option is back at `=m` after the
+`olddefconfig`, stop and report it (its dependency is a module: name the option and what
+`grep -n '<option>' .config` shows).
 
 ### 4e. Verify V4L2 streams API is enabled
 

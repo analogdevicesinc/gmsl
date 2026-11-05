@@ -201,7 +201,7 @@ Also check the free disk space in `<work_dir>` (default `~/gmsl-camera-work`, cr
 user and ask whether to continue or to choose another work folder (store it as `work_dir`).
 
 Whenever `work_dir` is set or changed, record whether this run creates the folder (the
-orchestrator's §Cleanup never deletes a folder the run did not create, and offers only the entries
+orchestrator's §Cleanup never deletes a folder the run did not create, and deletes only the entries
 the run added), before `mkdir -p`:
 ```bash
 python3 -c "
@@ -260,7 +260,9 @@ is required". Keep `/tmp/gmsl_pw_sudo` and `/tmp/gmsl_askpass` until the end of 
 ## usbipd
 
 WSL only (skip when `host` is `linux`: native Linux sees the SD card reader and USB devices
-directly). Needed by common/11 (SD card) and by nxp/4 §eMMC with uuu when `uuu` runs inside WSL.
+directly). Needed by common/11 (SD card) and by nxp/4 §eMMC with uuu only when the Linux `uuu`
+runs inside WSL. Not needed for the eMMC with `uuu.exe` on the Windows side (nxp/4's default on
+WSL): the board's USB device stays with Windows.
 
 ### Check for usbipd
 ```bash

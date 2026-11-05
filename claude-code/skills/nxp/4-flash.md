@@ -33,14 +33,13 @@ question, and ask the user to confirm before anything is written:
    Yocto section of that page calls the switch SW5: use the table).
    FRDM-IMX95-PRO, from NXP's getting-started page
    (`https://www.nxp.com/document/guide/getting-started-with-frdm-imx95-pro:GS-FRDM-IMX95-PRO`,
-   read October 2026): SW4[1:3] (BOOT_MODE3..1) = `0 0 1` serial download (USB), `0 1 0` eMMC
-   (default), `0 1 1` SD card; USB-C **J7** is the download port for uuu, **J11** the power input
-   (USB PD), **J22** the debug UART. That page **does not give SW4[4]** (BOOT_MODE0), and its Yocto
-   section mentions "SW1[1:4]" for SD boot, which contradicts the table; `UM12527.pdf` is not
-   downloadable without a login (`/docs/en/user-manual/UM12527.pdf` answered 404). So show the
-   three known positions, say that SW4[4] is missing, and ask the user to read the full setting
-   from the printed quick-start card, the silkscreen next to SW4, or UM12527. Never fill in
-   SW4[4] yourself.
+   read October 2026): its table's columns are SW4[1]..SW4[4] = BOOT_MODE3..BOOT_MODE0, with
+   SW4[1] = `x` (don't care) in every row: SW4[2:4] = `0 0 1` serial download (USB), `0 1 0` eMMC
+   (default), `0 1 1` SD card. Serial download and eMMC boot were set this way on a
+   FRDM-IMX95-PRO (2026-11-02). USB-C **J7** is the download port for uuu, **J11** the power input
+   (USB PD), **J22** the debug UART. The page's Yocto section mentions "SW1[1:4]" for SD boot,
+   which contradicts the table: use the table. Show the user all four positions of the mode
+   needed (for example serial download: SW4[1] any, SW4[2] = 0, SW4[3] = 0, SW4[4] = 1).
 2. Tell the user, for SD boot: the board then boots only from the SD card; **the eMMC (with its
    current system) is not used** while the switches are set to SD boot, and is not changed. To go
    back, power off, set SW4 back to eMMC boot and remove the SD card.
@@ -77,9 +76,15 @@ release the card (common/11 §Release).
 the `.wic` to the eMMC over USB while the board is in serial-download mode.
 
 1. **Get uuu** from the releases of https://github.com/nxp-imx/mfgtools (latest release; i.MX95
-   needs a recent version: check the release notes list i.MX95). Download it into
-   `<work_dir>/uuu/` (`uuu` for Linux, `uuu.exe` for Windows); it is a downloaded program: tell the
-   user it will run (permissions note of common/9) and `chmod +x` it.
+   needs a recent version). Download it into `<work_dir>/uuu/` (`uuu` for Linux, `uuu.exe` for
+   Windows); it is a downloaded program: tell the user it will run (permissions note of common/9)
+   and `chmod +x` it. Check that it knows the board's SoC in the program itself (the release notes
+   can be empty, as for 1.5.243):
+   ```bash
+   grep -ac 'MX95' <work_dir>/uuu/<uuu or uuu.exe>      # i.MX93: 'MX93'
+   ```
+   It must print a number above 0 (1.5.243: i.MX95 supported). If it prints 0, tell the user this
+   uuu does not list the SoC and ask for a newer release or another tool.
    - **Native Linux:** `uuu` needs access to the USB device: run it with sudo (host sudo of
      common/0 §Sudo password), or install its udev rules. The rule is a file in the host's system
      configuration that stays after the run: ask first (header: "uuu udev"): **Run uuu with sudo
@@ -97,19 +102,21 @@ the `.wic` to the eMMC over USB while the board is in serial-download mode.
      itself. Copy `uuu.exe`, `<imx_boot>` and `<wic>` to a Windows folder (e.g.
      `/mnt/c/Users/<windows user>/gmsl-uuu/`; uuu.exe reads Windows paths, and is much slower or
      fails on `\\wsl$\` paths) and run it from WSL as
-     `cmd.exe /c "cd /d C:\Users\<windows user>\gmsl-uuu && uuu.exe ..."`. Windows may need the
+     `cmd.exe /c "cd /d C:\Users\<windows user>\<uuu folder> && uuu.exe ..." < /dev/null`.
+     `<uuu folder>` must be new: `gmsl-uuu`, or, if that already exists (an earlier run, or the
+     user's own), `gmsl-uuu-<YYYYMMDD_HHMMSS>`; never write into or delete an existing folder. Windows may need the
      WinUSB driver for the board's download device (uuu's documentation; it usually installs
      automatically). Record the folder (its WSL path) in `<state>` as soon as it is created:
      ```bash
      python3 -c "
      import json
      state = json.load(open('/tmp/gmsl_camera_state.json'))
-     state['uuu_win_dir'] = '/mnt/c/Users/<windows user>/gmsl-uuu'
+     state['uuu_win_dir'] = '/mnt/c/Users/<windows user>/<uuu folder>'
      json.dump(state, open('/tmp/gmsl_camera_state.json', 'w'), indent=2)
      "
      ```
-     It holds a 10+ GB copy of the image: the orchestrator's §Cleanup (step 5a) offers to delete
-     it after flashing.
+     It holds a 10+ GB copy of the image: the orchestrator's §Cleanup (step 5a) deletes it,
+     without asking (only this folder, the one recorded in `uuu_win_dir`).
      Alternatively run the Linux `uuu` inside WSL with usbipd (common/0 §usbipd): `usbipd.exe
      bind` once per device, then `usbipd.exe attach --wsl --busid <id> --auto-attach` in the
      background, which re-attaches the device after each re-enumeration on the same port.
@@ -133,19 +140,23 @@ the `.wic` to the eMMC over USB while the board is in serial-download mode.
    ```
    `emmc_all` writes the bootloader to the eMMC boot partition and the whole `.wic` to the user
    area (including the U-Boot environment at `0x700000`, nxp/3 §Image). It takes several minutes;
-   run it in the background, with its output in a file (`> /tmp/gmsl_uuu.log 2>&1`). In a
+   run it in the background, with its output in a file, `<uuu_log>`: `<run_dir>/host/uuu.log`
+   when `verbosity` = `verbose` (it goes into the ZIP), otherwise `/tmp/gmsl_uuu.log`
+   (`> <uuu_log> 2>&1`). On WSL, give `cmd.exe` no input (`< /dev/null`): otherwise it reads the
+   rest of a script fed to bash on stdin as its own commands, and those never run in bash. In a
    console with VT support uuu ends with `Success 1 Failure 0`. **`uuu.exe` started from WSL has
    no VT console** (it prints `Your console don't support VT mode, fail back to verbose mode`) and
    then never prints that summary: there, the flash passed when uuu exits with 0 and every
    `Start Cmd:` line has an `Okay` (FRDM-IMX95-PRO, `emmc_all`: 12 of 12, the
    `FB: flash -raw2sparse all <wic>` step about 3–4 minutes, the last one `FB: done`):
    ```bash
-   tr -d '\r' < /tmp/gmsl_uuu.log | grep -o 'Start Cmd' | wc -l; tr -d '\r' < /tmp/gmsl_uuu.log | grep -o '>Okay' | wc -l
-   tr -d '\r' < /tmp/gmsl_uuu.log | grep -iE 'fail|error' | grep -v 'fail back to verbose mode'
+   tr -d '\r' < <uuu_log> | grep -o 'Start Cmd' | wc -l; tr -d '\r' < <uuu_log> | grep -o '>Okay' | wc -l
+   tr -d '\r' < <uuu_log> | grep -iE 'fail|error' | grep -v 'fail back to verbose mode'
    ```
    (the two counts must be equal; the last command must print nothing). On a failure, report
    uuu's message, and check the `imx_boot` file matches the board (nxp/0 §Unpack) and the uuu
-   version. Delete `/tmp/gmsl_uuu.log` afterwards.
+   version. Without verbose mode, delete `/tmp/gmsl_uuu.log` afterwards; in a verbose run the
+   log stays in `<run_dir>/host/`.
 6. **Switch back:** the user powers the board off, sets SW4 back to **eMMC boot**, and
    disconnects the USB-C download cable (keep the power supply). Ask them to confirm (header:
    "Boot switches"). On WSL, stop the `usbipd attach --auto-attach` process and detach the
@@ -180,5 +191,5 @@ If the board does not appear within 5 minutes, ask the user to check the boot sw
 serial console (`ip -4 addr show`; U-Boot prints the DTB it loads).
 
 Keep the sudo password file until the end of the run (later steps and the verbose package need it;
-§Cleanup deletes it). The orchestrator's §Cleanup removes the work copy only if the user does not
-keep `<work_dir>`.
+§Cleanup deletes it). The orchestrator's §Cleanup deletes the work copy with the other entries this
+run created in `<work_dir>`.

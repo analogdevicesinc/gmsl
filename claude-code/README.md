@@ -12,8 +12,9 @@ NXP i.MX) or the eMMC (NXP i.MX).
 ## Install
 
 The skill is the `skills` folder next to this README: `SKILL.md` (the only registered skill,
-named `gmsl-camera-pipeline`) and the `common/`, `rpi/`, `nxp/`, `generic/` subfolders that it
-reads during the run. Run the commands below from the folder that contains this README.
+named `gmsl-camera-pipeline`), the `common/`, `rpi/`, `nxp/`, `generic/` subfolders that it
+reads during the run, and the `tools/` and `patches/` folders with the helpers and driver
+patches it uses. Run the commands below from the folder that contains this README.
 
 **Option 1 (Recommended): Run Claude Code from the skill folder (no copying)**
 
@@ -66,9 +67,9 @@ The very first question is how verbose the whole run should be:
   command with its output and exit code, detected value, answer and decision), `choices.json`
   (the hardware answers), board diagnostics (`dmesg`, `lsmod`, media topology, assessment report,
   device tree), the generated device tree files and scripts, build logs and driver patches, and a
-  copy of the Claude Code session transcript. At the end, passwords are replaced by `****` in all
-  files, the folder is packed into `gmsl_debug_<date>_<time>.zip` (checked) and the folder is
-  deleted. Share the ZIP to report a problem.
+  copy of the Claude Code session transcript. At the end, passwords are replaced by `<password>`
+  in all files, the folder is packed into `gmsl_debug_<date>_<time>.zip` (checked) and the folder
+  is deleted. Share the ZIP to report a problem.
 
 Saying "verbose" or "debug" (or "non-verbose", "quiet") in the prompt answers it.
 
@@ -79,8 +80,9 @@ The next question is always whether the board is running and on the network:
 - **No**: the skill asks which board to prepare (Raspberry Pi 4 / 5, NXP i.MX), builds and flashes
   the medium, tells you how to boot it, and then continues as for **Yes**.
 
-At the end, host-side temporary files are removed, and the final message lists what is installed on
-the board and how to undo it. Nothing is removed from the board: it is left in its deployed state.
+At the end, the host-side temporary files and everything the run
+created in the work folder (kernel and U-Boot trees, toolchains, images) are removed, and the
+final message lists what is installed on the board and how to undo it. Nothing is removed from the board: it is left in its deployed state.
 
 ## Supported Hardware
 
@@ -176,17 +178,17 @@ skills/
 │   │
 │   ├── 10-uboot-env.md                             U-Boot envtools, environment CRC search, fw_setenv, offline env image
 │   │
-│   ├── 11-sd-card.md                               SD card detect, confirm, write, release
-│   │
-│   ├── assess.sh, i2cburst.c, i2c_retry_regmap.h   helpers
-│   │
-│   └── patches/                                    local ADI driver patch
+│   └── 11-sd-card.md                               SD card detect, confirm, write, release
 │
 ├── rpi/                                            Raspberry Pi: kernel source, ADI drivers, kernel build, image, camera setup
 │
 ├── nxp/                                            NXP i.MX: base image, kernel modules, device tree, U-Boot env, flash, camera setups
-│   │
-│   └── patches/                                    i.MX93 receiver patch
 │
-└── generic/                                        other boards: assessment, camera setup, artifacts
+├── generic/                                        other boards: assessment, camera setup, artifacts
+│
+├── tools/                                          helpers: assess.sh (board assessment), i2cburst.c (I2C test),
+│                                                   i2c_retry_regmap.h (I2C retry workaround)
+│
+└── patches/                                        local driver patches: max_des-force-pixel-mode.patch (ADI deserializer),
+                                                    imx93-dwc-mipi-csi2-color-mode16.patch (i.MX93 receiver)
 ```

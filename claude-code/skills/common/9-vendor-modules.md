@@ -11,6 +11,13 @@ Everything is built on the host, in `<work_dir>` (default `~/gmsl-camera-work`, 
 `work_dir`). Keep the driver sources in a local git repository **per driver** (one commit per
 change: the original sources first, then every fix, with the reason in the message), so the
 result can be exported as patches (`git format-patch`); **no remote, never push it anywhere**.
+Give every repository a `.gitignore` for the build outputs before its first commit, so that no
+commit (and no exported patch) contains `.o`/`.ko` files; and commit only the files a change
+touched (`git add <file>`, or `git commit -am` for files already tracked), never `git add -A`
+after a build:
+```bash
+printf '%s\n' '*.o' '*.ko' '*.mod' '*.mod.c' '*.mod.o' '.*.cmd' '.*.d' '*.a' '*.dwo' 'Module.symvers' 'modules.order' '.tmp_versions/' > .gitignore
+```
 Tell the user the plan and the time (the kernel build takes 15–30 minutes) and ask before
 starting.
 
@@ -78,6 +85,11 @@ definitions that depend on compiler features (`CONFIG_CC_HAS_*`, for example `CO
 ```bash
 diff <(grep -v '^#' <tpl_dir>/board.config | sort) <(grep -v '^#' .config | sort)
 ```
+These differences are harmless: `CONFIG_CC_VERSION_TEXT`, `CONFIG_GCC_VERSION`,
+`CONFIG_LD_VERSION`, `CONFIG_AS_VERSION` and the other `*_VERSION` numbers of the toolchain, and
+`CONFIG_CC_CAN_LINK` (whether the compiler can link user-space programs: the Arm GNU Toolchain
+can, the vendor's build may not have; it does not affect the kernel or the symbol CRCs). Any other
+difference, a `CC_HAS_*` one in particular, means the compiler does not match.
 If the host compiler does not match, ask to download a toolchain of the same major version (Arm
 GNU Toolchain for Arm boards, `https://developer.arm.com/-/media/Files/downloads/gnu/<ver>/binrel/`,
 for example `arm-gnu-toolchain-<ver>-x86_64-aarch64-none-linux-gnu.tar.xz`). Take the **newest**
@@ -117,7 +129,7 @@ a vendor module and compare them with `Module.symvers`. Any mismatch means the m
 refused (`disagrees about version of symbol`); fix the compiler or config first.
 ```bash
 # live board: on the board (decompress .ko.xz/.ko.zst first, in /tmp)
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "f=\$(modinfo -n videodev); case \$f in *.xz) xz -dc \$f > /tmp/gmsl_m.ko;; *.zst) zstd -dcq \$f > /tmp/gmsl_m.ko;; *) cp \$f /tmp/gmsl_m.ko;; esac; modprobe --dump-modversions /tmp/gmsl_m.ko; rm -f /tmp/gmsl_m.ko" > /tmp/gmsl_board_crcs.txt
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "f=\$(modinfo -n videodev); case \$f in *.xz) xz -dc \$f > /tmp/gmsl_m.ko;; *.zst) zstd -dcq \$f > /tmp/gmsl_m.ko;; *) cp \$f /tmp/gmsl_m.ko;; esac; modprobe --dump-modversions /tmp/gmsl_m.ko; rm -f /tmp/gmsl_m.ko" > /tmp/gmsl_board_crcs.txt
 # image: on the host
 modprobe --dump-modversions /tmp/gmsl_m.ko > /tmp/gmsl_board_crcs.txt
 # compare
@@ -137,7 +149,8 @@ Copy `drivers/media/i2c/maxim-serdes` from the **newest** ADI GMSL branch (`adi_
 cd <work_dir> && git clone --depth 1 --filter=blob:none --sparse -b <adi_gmsl_branch> https://github.com/analogdevicesinc/linux.git adi-linux
 cd adi-linux && git sparse-checkout set drivers/media/i2c/maxim-serdes Documentation/devicetree/bindings/media/i2c
 mkdir -p <work_dir>/maxim-serdes && cp drivers/media/i2c/maxim-serdes/* <work_dir>/maxim-serdes/
-cd <work_dir>/maxim-serdes && git init -q && git add -A && git commit -qm "ADI maxim-serdes from <adi_gmsl_branch> (original)"
+cd <work_dir>/maxim-serdes && git init -q && printf '%s\n' '*.o' '*.ko' '*.mod' '*.mod.c' '*.mod.o' '.*.cmd' '.*.d' '*.a' '*.dwo' 'Module.symvers' 'modules.order' '.tmp_versions/' > .gitignore
+git add -A && git commit -qm "ADI maxim-serdes from <adi_gmsl_branch> (original)"
 ```
 Replace its Kconfig/Makefile with a `Kbuild` (commit it):
 ```make
@@ -181,8 +194,8 @@ module parameter or device tree property for it; do not offer one that does not 
 receivers need pixel mode (the platform file says which: nxp/1 §i.MX93). Then add a local module
 parameter, as its own commit marked as a local addition:
 ```bash
-cd <work_dir>/maxim-serdes && git apply --check <skill dir>/common/patches/max_des-force-pixel-mode.patch \
-  && git apply <skill dir>/common/patches/max_des-force-pixel-mode.patch \
+cd <work_dir>/maxim-serdes && git apply --check <skill dir>/patches/max_des-force-pixel-mode.patch \
+  && git apply <skill dir>/patches/max_des-force-pixel-mode.patch \
   && git -c user.name=gmsl-skill -c user.email=gmsl@localhost commit -qam "max_des: force_pixel_mode parameter (local addition, not in ADI's driver)"
 ```
 It adds `force_pixel_mode` (bool, `0444`) to `max-serdes` and, when set, restricts
@@ -205,7 +218,7 @@ tree:
 grep -n get_frame_desc <work_dir>/linux-<tag>/drivers/media/i2c/<sensor>.c
 ```
 If it is missing, add a **minimal** one in a copy of the driver, in its own git repository
-(`<work_dir>/<sensor>`; original first, then the patch): one entry: the active format's code,
+(`<work_dir>/<sensor>`, with the same `.gitignore`; original first, then the patch): one entry: the active format's code,
 stream 0, VC 0, the CSI-2 data type for the format's bit depth (`MIPI_CSI2_DT_RAW8`/`RAW10`), as
 in ADI's `imx219.c` without its embedded-data stream; `.type =
 V4L2_MBUS_FRAME_DESC_TYPE_CSI2`. Build it out of tree like the serdes drivers (`Kbuild`:
@@ -215,7 +228,7 @@ module; ask first and say so).
 ## Retry patch
 
 Only when the user agreed to the I2C retry workaround (common/6 §Retry workaround, after the last
-row of common/6 §Results): apply `<skill dir>/common/i2c_retry_regmap.h` to the deserializer,
+row of common/6 §Results): apply `<skill dir>/tools/i2c_retry_regmap.h` to the deserializer,
 serializer and sensor driver repositories as described there (one commit per driver, marked as a
 workaround), rebuild them with the same `make ... M=$PWD` command, and install them again
 (§Install on the board, or §Install into an image). Report the `i2c-retry:` recoveries after the
@@ -226,7 +239,7 @@ next boot and stream start, and list the workaround in the final message.
 Ask first. Before installing, look for modules with the same names anywhere under `updates/`
 (for example from an earlier manual install of the ADI drivers):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /lib/modules/\$(uname -r)/updates \( -name 'max*.ko*' -o -name '<sensor>.ko*' \) 2>/dev/null"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "find /lib/modules/\$(uname -r)/updates \( -name 'max*.ko*' -o -name '<sensor>.ko*' \) 2>/dev/null"
 ```
 If modules with the names of the new ones (`max-serdes`/`max_serdes`, `max96717`, `max9296a`,
 `max96724`, `<sensor>`) are in another `updates/` subfolder than `updates/<subfolder>/`, tell the
@@ -246,15 +259,15 @@ back).
 Copy the modules to `/lib/modules/$(uname -r)/updates/<subfolder>/` (the platform file names
 `<subfolder>`, e.g. `gmsl`), run `depmod -a`:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "mkdir -p /tmp/gmsl_mods"
-scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] <user>@<ip>:/tmp/gmsl_mods/
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'mkdir -p /lib/modules/\$(uname -r)/updates/<subfolder> && cp /tmp/gmsl_mods/*.ko /lib/modules/\$(uname -r)/updates/<subfolder>/ && depmod -a'; rm -rf /tmp/gmsl_mods"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "mkdir -p /tmp/gmsl_mods"
+scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] <user>@<ip>:/tmp/gmsl_mods/
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'mkdir -p /lib/modules/\$(uname -r)/updates/<subfolder> && cp /tmp/gmsl_mods/*.ko /lib/modules/\$(uname -r)/updates/<subfolder>/ && depmod -a'; rm -rf /tmp/gmsl_mods"
 ```
 Check with `modinfo -n <module>` that the new ones are picked (the path must be in
 `updates/<subfolder>/`), and test-load them once before the device tree exists (`modprobe
 max9296a` / `max96717`: no "disagrees about version of symbol" in `dmesg`), then unload them:
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "for m in max-serdes max96717 <des module> <sensor>; do modinfo -n \$m; done; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'modprobe <des module> && modprobe max96717; dmesg | tail -5; modprobe -r max96717 <des module> max-serdes'"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "for m in max-serdes max96717 <des module> <sensor>; do modinfo -n \$m; done; SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'modprobe <des module> && modprobe max96717; dmesg | tail -5; modprobe -r max96717 <des module> max-serdes'"
 ```
 A module that is part of a live media graph cannot be unloaded (`is in use`); replacing it needs
 a reboot (common/5 §Reboot).

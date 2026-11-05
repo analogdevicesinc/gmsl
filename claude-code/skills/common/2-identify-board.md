@@ -16,16 +16,16 @@ anywhere else, except what generic/2 §Artifacts package lists.
 
 ## Run the assessment
 
-Copy `<skill dir>/common/assess.sh` to the board and run it. It only reads; sudo is used for
+Copy `<skill dir>/tools/assess.sh` to the board and run it. It only reads; sudo is used for
 `dmesg`, `fw_printenv` and reading `/sys/firmware/fdt` (as root it needs none). When the login is
 not `root`, first put the board password and the sudo helper on the board, the same way as
 common/5 §Control socket (no password in a command; the helper is used by this file and later
 ones, and deleted by the orchestrator's §Cleanup step 3). Then save the report on the host:
 ```bash
 mkdir -p /tmp/gen_gmsl_dts/assess
-sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <user>@<ip> -- "umask 077; cat > /tmp/gmsl_pw_board; printf '#!/bin/sh\ncat /tmp/gmsl_pw_board\n' > /tmp/gmsl_askpass; chmod 700 /tmp/gmsl_askpass" < /tmp/gmsl_pw_board   # not root only
-sshpass -f /tmp/gmsl_pw_board scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <skill dir>/common/assess.sh <user>@<ip>:/tmp/gmsl_assess.sh
-sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <user>@<ip> -- "sh /tmp/gmsl_assess.sh; rm -f /tmp/gmsl_assess.sh" > /tmp/gen_gmsl_dts/assess/assess_report.txt 2>&1
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <user>@<ip> -- "umask 077; cat > /tmp/gmsl_pw_board; printf '#!/bin/sh\ncat /tmp/gmsl_pw_board\n' > /tmp/gmsl_askpass; chmod 700 /tmp/gmsl_askpass" < /tmp/gmsl_pw_board   # not root only
+sshpass -f /tmp/gmsl_pw_board scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <skill dir>/tools/assess.sh <user>@<ip>:/tmp/gmsl_assess.sh
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <user>@<ip> -- "sh /tmp/gmsl_assess.sh; rm -f /tmp/gmsl_assess.sh" > /tmp/gen_gmsl_dts/assess/assess_report.txt 2>&1
 ```
 (on Windows, use common/0 §Windows adaptations; the report then goes to
 `%TEMP%\gen_gmsl_dts\assess\assess_report.txt`). The report ends with `=== end`; if it does not,
@@ -33,7 +33,7 @@ the script was interrupted (connection lost): run it again once, then report the
 
 Also save the running device tree on the host, for the later steps (common/3, common/4):
 ```bash
-sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cat /sys/firmware/fdt" > /tmp/gen_gmsl_dts/assess/running.dtb
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A cat /sys/firmware/fdt" > /tmp/gen_gmsl_dts/assess/running.dtb
 dtc -q -I dtb -O dts -o /tmp/gen_gmsl_dts/assess/running.dts /tmp/gen_gmsl_dts/assess/running.dtb
 ```
 (as `root`, or on images without `sudo`, run `cat /sys/firmware/fdt` directly). If
@@ -43,8 +43,8 @@ dtc -q -I dtb -O dts -o /tmp/gen_gmsl_dts/assess/running.dts /tmp/gen_gmsl_dts/a
 Also save the board's kernel config (Build mode needs it: common/9, nxp/1) and its DTB files (the
 glue is modelled on the vendor's camera DTBs: common/4 §Glue, nxp/2):
 ```bash
-sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- 'zcat /proc/config.gz' > /tmp/gen_gmsl_dts/assess/board.config 2>/dev/null || rm -f /tmp/gen_gmsl_dts/assess/board.config
-mkdir -p /tmp/gen_gmsl_dts/assess/dtbs; for f in <DTB files listed under shipped_overlays>; do sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- "cat $f" > /tmp/gen_gmsl_dts/assess/dtbs/$(basename $f); done
+sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <user>@<ip> -- 'zcat /proc/config.gz' > /tmp/gen_gmsl_dts/assess/board.config 2>/dev/null || rm -f /tmp/gen_gmsl_dts/assess/board.config
+mkdir -p /tmp/gen_gmsl_dts/assess/dtbs; for f in <DTB files listed under shipped_overlays>; do sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <user>@<ip> -- "cat $f" > /tmp/gen_gmsl_dts/assess/dtbs/$(basename $f); done
 ```
 `<DTB files listed under shipped_overlays>`: the paths of the `dtb: <path> <size>` lines and the
 camera `*.dtbo` lines of the report's `shipped_overlays` section. They come from the boot
@@ -85,7 +85,7 @@ Read from the report (section names in brackets) and from the identify command o
 - **Home folder** of the login, `<board_home>`. Do not assume it: root's home is `/root` on most
   images, including NXP's Yocto images:
   ```bash
-  sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no <user>@<ip> -- 'echo $HOME'
+  sshpass -f /tmp/gmsl_pw_board ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR <user>@<ip> -- 'echo $HOME'
   ```
   Use `~` or `$HOME` in remote commands, or the stored `<board_home>` where a full path is
   needed (an `scp` target, a file written into the board's configuration), never

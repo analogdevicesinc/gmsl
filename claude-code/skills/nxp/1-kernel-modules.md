@@ -68,7 +68,7 @@ both measured on the i.MX93 11x11 EVK with NXP 6.18.37-2.1.0 (MAX96724 + MAX9671
    ISI: the image is squeezed 3:1 into the left third (colour bars 80 px wide instead of 240 at
    1080p), for RAW8 and RAW10 alike. The driver is built into the kernel
    (`CONFIG_VIDEO_DWC_MIPI_CSIS=y`), so a module cannot fix it: the debug kernel carries the patch
-   `<skill dir>/nxp/patches/imx93-dwc-mipi-csi2-color-mode16.patch` (§Debug kernel step 3a). It
+   `<skill dir>/patches/imx93-dwc-mipi-csi2-color-mode16.patch` (§Debug kernel step 3a). It
    sets `COLOR_MODE16` for RAW6–RAW14 data types only when the board is `fsl,imx93`, so the i.MX95
    is unchanged.
 2. **GMSL pixel mode:** in tunnel mode the receiver gets no usable line timing and stores only
@@ -96,7 +96,8 @@ driver, §Retry patch (only if agreed), then **§Install on the board** with `<s
 user and ask (header: "Kernel"): **Install the debug kernel next to NXP's (Recommended)** | **Stop**.
 With consent: build it as §Debug kernel steps 1–5 (with step 3a), install it on the running board
 the same way as step 6 but over the control socket (the modules to
-`/lib/modules/<debug_kernel_release>/` with the ADI modules in its `updates/gmsl/`, `depmod -a
+`/lib/modules/<debug_kernel_release>/` with the ADI modules in its `updates/gmsl/`, `chown -R
+root:root /lib/modules/<debug_kernel_release>` and the same `find` check as step 6, `depmod -a
 <debug_kernel_release>` on the board, `Image-gmsl-debug` on the boot partition that was booted;
 NXP's `Image` and modules stay), and set `image=Image-gmsl-debug` with common/10 (§Build envtools,
 backup first; recovery `setenv image Image; saveenv`). Write `/etc/modprobe.d/gmsl.conf`
@@ -173,12 +174,20 @@ Tested on the FRDM-IMX95-PRO (end of this section); values checked on it with NX
    All four must show `=y` (`DYNAMIC_FTRACE` needs `FUNCTION_TRACER`). Save the config diff
    (`diff <tpl_dir>/board.config .config`) for the final message: only these options and what
    they select may differ.
-3a. **Kernel patches** (i.MX93: `fsl,imx93` in the base DTB's compatible; §i.MX93): apply each as
+3a. **Kernel patches** (i.MX93, §i.MX93): only when the board's **root node** compatible lists
+   `fsl,imx93`. Read only that property, not a text search of the whole device tree: the i.MX95's
+   device tree also has `fsl,imx93` in several node compatibles (blocks it shares with the
+   i.MX93):
+   ```bash
+   fdtget <tpl_dir>/dtbs/<base_dtb> / compatible            # image path (nxp/0)
+   tr '\0' ' ' < /proc/device-tree/compatible; echo          # live board (over the control socket)
+   ```
+   The FRDM-IMX95-PRO prints `fsl,frdm-imx95-pro fsl,imx95`: no kernel patch. Apply each patch as
    its own commit, then check the release name again, because the commit changes the `-g<hash>`
    part:
    ```bash
    cd <work_dir>/linux-<tag>
-   git apply --check <skill dir>/nxp/patches/imx93-dwc-mipi-csi2-color-mode16.patch && git apply <skill dir>/nxp/patches/imx93-dwc-mipi-csi2-color-mode16.patch
+   git apply --check <skill dir>/patches/imx93-dwc-mipi-csi2-color-mode16.patch && git apply <skill dir>/patches/imx93-dwc-mipi-csi2-color-mode16.patch
    git -c user.name=gmsl-skill -c user.email=gmsl@localhost commit -qam "dwc-mipi-csi2: 16-bit IPI for RAW on i.MX93 (local)"
    make ARCH=arm64 CROSS_COMPILE=<prefix> LOCALVERSION=<x>-debug kernelrelease
    ```
@@ -212,23 +221,27 @@ Tested on the FRDM-IMX95-PRO (end of this section); values checked on it with NX
    rm -rf <work_dir>/debug-modules && make ARCH=arm64 CROSS_COMPILE=<prefix> LOCALVERSION=<x>-debug INSTALL_MOD_PATH=<work_dir>/debug-modules INSTALL_MOD_STRIP=1 modules_install
    DREL=<debug_kernel_release>
    rm -f <work_dir>/debug-modules/lib/modules/$DREL/build <work_dir>/debug-modules/lib/modules/$DREL/source   # links to the host's tree
-   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c "cp -a <work_dir>/debug-modules/lib/modules/$DREL /tmp/gmsl_nxp_rootfs/lib/modules/ \
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c "cp -r <work_dir>/debug-modules/lib/modules/$DREL /tmp/gmsl_nxp_rootfs/lib/modules/ \
      && mkdir -p /tmp/gmsl_nxp_rootfs/lib/modules/$DREL/updates/gmsl \
      && cp <work_dir>/maxim-serdes/*.ko [<work_dir>/<sensor>/<sensor>.ko] /tmp/gmsl_nxp_rootfs/lib/modules/$DREL/updates/gmsl/ \
+     && chown -R root:root /tmp/gmsl_nxp_rootfs/lib/modules/$DREL \
      && depmod -b /tmp/gmsl_nxp_rootfs $DREL \
      && cp arch/arm64/boot/Image /tmp/gmsl_nxp_boot/Image-gmsl-debug"
    ls -l /tmp/gmsl_nxp_boot/Image /tmp/gmsl_nxp_boot/Image-gmsl-debug
    grep -E 'updates/gmsl/(max|<sensor>)|gpu/arm/midgard/mali_kbase' /tmp/gmsl_nxp_rootfs/lib/modules/$DREL/modules.dep
+   SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A find /tmp/gmsl_nxp_rootfs/lib/modules/$DREL \( ! -user root -o ! -group root \) -print | head -5
    ```
    The `modules.dep` check must list the ADI modules with their `updates/gmsl/` path and
-   `mali_kbase`. Firmware (`/lib/firmware`) is shared and stays as it is. NXP's `Image` and
+   `mali_kbase`, and the `find` must print nothing: everything under `/lib/modules/$DREL` belongs
+   to root (the staging folder belongs to the host user, whose UID can be a user of the image,
+   for example `weston` with UID 1000 on NXP's images, who could then replace kernel modules). Firmware (`/lib/firmware`) is shared and stays as it is. NXP's `Image` and
    `/lib/modules/<release>` are not touched; the ADI modules exist only for the debug kernel.
    Record `kernel_release` = `debug_kernel_release`, `modules_built`, `drivers_ok`.
 7. **U-Boot:** nxp/3 §Image also sets `image=Image-gmsl-debug` (step 2 there).
 8. **First boot** (nxp/5 §Order, driver check): `uname -r` must print `debug_kernel_release`;
    check the debugging features and the GPU:
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "uname -r; mount | grep -q ' /sys/kernel/debug ' || mount -t debugfs none /sys/kernel/debug; test -e /sys/kernel/debug/dynamic_debug/control && echo dyndbg ok; grep -qw function /sys/kernel/tracing/available_tracers && echo ftrace ok; lsmod | grep -q mali_kbase && echo gpu ok; pgrep -x weston >/dev/null && echo weston ok"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "uname -r; mount | grep -q ' /sys/kernel/debug ' || mount -t debugfs none /sys/kernel/debug; test -e /sys/kernel/debug/dynamic_debug/control && echo dyndbg ok; grep -qw function /sys/kernel/tracing/available_tracers && echo ftrace ok; lsmod | grep -q mali_kbase && echo gpu ok; pgrep -x weston >/dev/null && echo weston ok"
    ```
    The ADI drivers (`max-serdes`, `max9296a`, `max96717`) have **no** `dev_dbg`/`pr_debug`
    calls, so dynamic debug has nothing to switch on in them: trace them with ftrace instead (163

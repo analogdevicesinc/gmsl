@@ -53,8 +53,8 @@ warn: "The stock kernel is newer than the ADI GMSL base. Patches will be ported 
 ## Step 3: Clone the kernel source
 
 The kernel tree is `<work_dir>/rpi-linux` (`<work_dir>` from `<state>`, default
-`~/gmsl-camera-work`), on the **stock** branch. A kept work folder from an earlier run may
-already have it (the orchestrator's §Cleanup keeps it for reuse), so check first:
+`~/gmsl-camera-work`), on the **stock** branch. A work folder that existed before the run may
+already have it (§Cleanup deletes only what a run created), so check first:
 ```bash
 test -d <work_dir>/rpi-linux/.git && git -C <work_dir>/rpi-linux rev-parse --abbrev-ref HEAD
 ```

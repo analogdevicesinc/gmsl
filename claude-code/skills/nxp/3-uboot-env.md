@@ -51,7 +51,7 @@ is `root` and the image may have no `sudo`: run common/10's board commands as ro
 - the write, after the user agreed (header: "Boot change", showing `fdtfile:
   imx95-19x19-frdm-pro.dtb → imx95-19x19-frdm-pro-gmsl.dtb` and the recovery below):
   ```bash
-  ssh -S /tmp/gmsl_ssh_sock root@<ip> -- "cd ~/Workspace/uboot-env && ./fw_setenv -c fw_env.config fdtfile imx95-19x19-frdm-pro-gmsl.dtb && ./fw_printenv -c fw_env.config fdtfile"
+  ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null root@<ip> -- "cd ~/Workspace/uboot-env && ./fw_setenv -c fw_env.config fdtfile imx95-19x19-frdm-pro-gmsl.dtb && ./fw_printenv -c fw_env.config fdtfile"
   ```
   (a non-root login: wrap the command in `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c '...'`).
 
@@ -63,7 +63,7 @@ the control socket, after the backup).
 Then reboot with common/5 §Reboot (and its §Probe check). After the reboot, check that the GMSL DTB
 is the one running (it must print the deserializer node's path):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /proc/device-tree/ -name 'gmsl-deserializer*' | head -1"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "find /proc/device-tree/ -name 'gmsl-deserializer*' | head -1"
 ```
 If it is not, U-Boot did not use the written environment (wrong copy, or `bootflow scan` found
 another boot entry): see the recovery, and fall back to common/10 §Console fallback.

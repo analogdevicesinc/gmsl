@@ -28,6 +28,11 @@ git remote add rpi https://github.com/raspberrypi/linux
 git fetch rpi <adi_base_branch> --deepen=5000
 ```
 
+If a clone or fetch fails on the network (`early EOF`, `invalid index-pack output`, `RPC failed`,
+a timeout), run the same commands again once (the `rm -rf` first); if it fails again, tell the
+user and stop. The same applies to every `git clone` of these files (rpi/0 Step 3, common/4
+§Templates, common/9).
+
 Note: the `--deepen=5000` is needed to find the common ancestor between the ADI fork
 and the upstream kernel so that `--not` works correctly.
 
@@ -325,7 +330,7 @@ curl -sL "${BASE_URL}/drivers/media/i2c/dummy-cam.c" \
 
 ### 5c. Missing header defines for ADI imx219 (conditional)
 
-The ADI imx219 uses two defines that may or may not be present in the stock kernel.
+The ADI imx219 uses three defines that may or may not be present in the stock kernel.
 Check before adding:
 
 **`V4L2_SUBDEV_ROUTE_FL_IMMUTABLE`** in `include/uapi/linux/v4l2-subdev.h`:

@@ -108,7 +108,7 @@ to that device. Choose every alias (and the deserializer pool) so that it is:
 2. not bound in `i2c_devices` of the assessment, and
 3. free when read once on the live board with
    ```bash
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "i2cdetect -y -r <bus> <addr> <addr>"
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "PATH=\$PATH:/usr/sbin:/sbin i2cdetect -y -r <bus> <addr> <addr>"
    ```
    (ask before probing, as for the deserializer in common/3 §I2C probe). This step catches
    devices that only the bootloader uses (for example a USB-PD controller at `0x52`, which Linux
@@ -309,7 +309,7 @@ DTB**: it is the recovery (the bootloader falls back to it when the setting is u
    §Merged DTB). Copy it to the host:
    ```bash
    mkdir -p /tmp/gen_gmsl_dts/dtb
-   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip>:<boot dir>/<base_dtb> /tmp/gen_gmsl_dts/dtb/
+   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip>:<boot dir>/<base_dtb> /tmp/gen_gmsl_dts/dtb/
    ```
    (image path: copy it from the mounted boot partition, e.g. `/tmp/gmsl_nxp_boot/<base_dtb>`).
 2. Merge on the host:
@@ -323,8 +323,8 @@ DTB**: it is the recovery (the bootloader falls back to it when the setting is u
 3. Copy `<gmsl_dtb>` next to `<base_dtb>` (ask first on a live board; the boot partition may be
    mounted elsewhere than `/boot`, for example `/run/media/boot-mmcblk0p1`):
    ```bash
-   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes /tmp/gen_gmsl_dts/dtb/<gmsl_dtb> <user>@<ip>:/tmp/gmsl_dtb.tmp
-   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'cp /tmp/gmsl_dtb.tmp <boot dir>/<gmsl_dtb> && sync'; rm -f /tmp/gmsl_dtb.tmp; ls -l <boot dir>/<base_dtb> <boot dir>/<gmsl_dtb>"
+   scp -o ControlPath=/tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null /tmp/gen_gmsl_dts/dtb/<gmsl_dtb> <user>@<ip>:/tmp/gmsl_dtb.tmp
+   ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c 'cp /tmp/gmsl_dtb.tmp <boot dir>/<gmsl_dtb> && sync'; rm -f /tmp/gmsl_dtb.tmp; ls -l <boot dir>/<base_dtb> <boot dir>/<gmsl_dtb>"
    ```
    Logged in as `root` (NXP images, which may have no `sudo`): run the same `cp ... && sync`
    directly, without `SUDO_ASKPASS=/tmp/gmsl_askpass sudo -A sh -c`. Image path (host sudo):

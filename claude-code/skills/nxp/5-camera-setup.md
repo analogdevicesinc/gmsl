@@ -84,7 +84,7 @@ Skip steps 2–4 and the reboot of step 5: read `<skill dir>/common/5-connect-re
 §Control socket and §Probe check (and §Camera port check if the deserializer does not probe), and
 check that the GMSL DTB is the one booted (it must print the deserializer node's path):
 ```bash
-ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes <user>@<ip> -- "find /proc/device-tree/ -name 'gmsl-deserializer*' | head -1"
+ssh -S /tmp/gmsl_ssh_sock -o BatchMode=yes -o UserKnownHostsFile=/dev/null <user>@<ip> -- "find /proc/device-tree/ -name 'gmsl-deserializer*' | head -1"
 ```
 (The trailing `/` matters: `/proc/device-tree` is a link, which `find` does not follow without
 it.) If it prints nothing, U-Boot booted another DTB (nxp/3 §Values: `bootflow scan`, the SD/eMMC
@@ -242,7 +242,7 @@ is installed and how to undo it:
   `fdtfile` pointing to it. Undo:
   - when common/10 §Build envtools ran on the board (nxp/3 §Live board): `cd ~/Workspace/uboot-env
     && ./fw_setenv -c fw_env.config fdtfile imx95-19x19-frdm-pro.dtb && reboot`; the environment
-    backup is in `~/Workspace/uboot-env/` and on the host in `<work_dir>` (if kept);
+    backup is in `~/Workspace/uboot-env/` and on the host in the folder §Cleanup step 0 copied it to;
   - on a medium flashed by this run (`entry` = `prepare`, nxp/3 §Image; no envtools on the board):
     on the U-Boot console `setenv fdtfile imx95-19x19-frdm-pro.dtb; saveenv`, or
     `env default -a; saveenv`, or flash the stock NXP image again;
