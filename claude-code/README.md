@@ -52,13 +52,6 @@ Start Claude Code (`claude`) and ask, for example:
 - "set up my GMSL camera on 192.168.1.42" (an IP address skips the board search)
 - "build a Raspberry Pi 5 SD card with the ADI GMSL drivers"
 - "flash my FRDM-IMX95-PRO with GMSL support"
-- "GMSL setup only" (nothing is built or flashed; the board must already have the ADI drivers)
-
-By default the **entire pipeline** runs: even when the prompt mentions flashing or building, the
-skill first asks whether the board is on the network. **A board on the network is never
-flashed**: if its kernel lacks the ADI GMSL drivers, they are patched and built for the kernel it
-runs and installed on it. Flashing happens only on the "No" path (no board running yet). Say
-"GMSL setup only" to skip building and flashing altogether.
 
 The very first question is how verbose the whole run should be:
 - **Non-verbose**: the normal run, progress in the chat only.
@@ -71,18 +64,22 @@ The very first question is how verbose the whole run should be:
   in all files, the folder is packed into `gmsl_debug_<date>_<time>.zip` (checked) and the folder
   is deleted. Share the ZIP to report a problem.
 
-Saying "verbose" or "debug" (or "non-verbose", "quiet") in the prompt answers it.
-
-The next question is always whether the board is running and on the network:
+The next question is whether the board is running and on the network, even when the prompt
+mentions flashing or building (an IP address or hostname in the prompt answers it with Yes):
 - **Yes**: the skill finds the board (mDNS, then a MAC address search on the local subnets, then
   it asks for the IP address and login), runs a read-only assessment on it, selects the platform
-  and continues with the camera setup.
-- **No**: the skill asks which board to prepare (Raspberry Pi 4 / 5, NXP i.MX), builds and flashes
-  the medium, tells you how to boot it, and then continues as for **Yes**.
+  and continues with the camera setup. A board that already has the ADI GMSL drivers is set up
+  directly. If its kernel lacks them, they are patched and built for the kernel it runs and
+  installed on it, after you agree to the build plan. **A board on the network is never
+  flashed.**
+- **No**: the skill asks which board to prepare (Raspberry Pi, NXP i.MX), builds and flashes
+  the medium, tells you how to boot it, and then continues as for **Yes**. This is the only path
+  that flashes.
 
 At the end, the host-side temporary files and everything the run
 created in the work folder (kernel and U-Boot trees, toolchains, images) are removed, and the
-final message lists what is installed on the board and how to undo it. Nothing is removed from the board: it is left in its deployed state.
+final message lists what is installed on the board and how to undo it. Nothing is removed from
+the board: it is left in its deployed state.
 
 ## Supported Hardware
 
@@ -143,7 +140,7 @@ GMSL chips and cameras:
 for any run that uses `sudo`: the build/flash paths, building drivers for a board's kernel, and
 installing missing host tools. The skill writes your sudo password once to a private file and runs 
 `sudo -A` with a small helper that reads it, so the password never appears in a command or a log. 
-Both files are deleted at the end of the run. In auto mode Claude Code's safety checks block these 
+Both files are deleted at the end of the run. In auto mode, Claude Code's safety checks block these 
 commands, so the run stops at the first `sudo` step. Switch modes with Shift+Tab before starting 
 (or when the skill asks for the sudo password).
 
@@ -156,11 +153,11 @@ skills/
 │
 ├── common/
 │   │
-│   ├── 0-host.md                                   host OS (Windows/WSL/Linux), host tools, sudo password file, wsl --mount check, usbipd
+│   ├── 0-host.md                                   host OS, host tools, sudo password file, wsl mount check, usbipd
 │   │
 │   ├── 1-find-board.md                             mDNS + MAC address search, default logins, manual IP/credentials
 │   │
-│   ├── 2-identify-board.md                         board sudo helper, assess.sh, running device tree, kernel config, DTBs, platform choice
+│   ├── 2-identify-board.md                         board sudo helper, running device tree, kernel config, DTBs, platform choice
 │   │
 │   ├── 3-camera-questions.md                       deserializer/serializer/sensor, EV kit checks, I2C probe, path check, driver check
 │   │
@@ -170,7 +167,7 @@ skills/
 │   │
 │   ├── 6-i2c-check.md                              i2cburst tests, I2C retry workaround
 │   │
-│   ├── 7-media-pipeline.md                         media-ctl routes and formats, media_cfg.sh
+│   ├── 7-media-pipeline.md                         media-ctl routes and formats
 │   │
 │   ├── 8-frames-viewer.md                          frame check, content check, colour-bar test, desktop detection, qv4l2, GStreamer
 │   │
@@ -186,9 +183,7 @@ skills/
 │
 ├── generic/                                        other boards: assessment, camera setup, artifacts
 │
-├── tools/                                          helpers: assess.sh (board assessment), i2cburst.c (I2C test),
-│                                                   i2c_retry_regmap.h (I2C retry workaround)
+├── tools/                                          helpers: board assessment, I2C test, I2C retry workaround
 │
-└── patches/                                        local driver patches: max_des-force-pixel-mode.patch (ADI deserializer),
-                                                    imx93-dwc-mipi-csi2-color-mode16.patch (i.MX93 receiver)
+└── patches/                                        local driver patches: ADI deserializer, i.MX93 receiver
 ```

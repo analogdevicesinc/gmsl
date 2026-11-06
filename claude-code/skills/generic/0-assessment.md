@@ -48,10 +48,6 @@ kernel tag or `lf_v` in `u-boot,version`) → nxp/5. Update `platform` in `<stat
 
 ## Best-effort plan
 
-With `scope` = `setup_only` (the user asked for the GMSL setup only), the plan contains no
-building, porting or boot changes: tasks that need them are listed as missing, and the user is
-offered the full pipeline once (header: "Scope", as in the orchestrator's §Flow).
-
 Every red or amber layer becomes a task with the approach to try. Show the plan as a numbered
 list (layer → task → what it changes on the board → time), store it as `generic_plan` in
 `<state>`, and ask the user to agree (header: "Plan"): **Go ahead (Recommended)** | **Only build

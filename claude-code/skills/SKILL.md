@@ -98,7 +98,6 @@ Keys (each file says which it reads and writes):
 | `verbosity`, `run_dir`, `log` | §Flow (first question), §Verbose mode | `quiet` or `verbose`; with `verbose`, the run folder `<run_dir>` in the current folder and the log file `<log>` = `<run_dir>/adi_gmsl_agent_log.txt` |
 | `run_started` | §Flow (Step 1) | Unix time the run started; §Cleanup removes only `/tmp/gmsl_*` files newer than it |
 | `entry` | §Flow | `network` (Q1 Yes) or `prepare` (Q1 No) |
-| `scope` | §Flow (Step 2) | `full` (default: the pipeline decides whether to build/flash) or `setup_only` (the user asked for the GMSL setup only: nothing is built or flashed) |
 | `flash_requested` | §Flow (Step 2) | `True` when the prompt asked to flash or build (a board on the network is never flashed; the skill then says why flashing is skipped) |
 | `target_platform` | §Flow (Q2) | `rpi` or `nxp`: the board being prepared |
 | `rpi_model` | §Flow (No path: Raspberry Pi model), common/2 | `5` or `4` (the cam.py profile prefix is `rpi<rpi_model>`: `rpi5`, `rpi4`; rpi/4 §Profile) |
@@ -170,21 +169,15 @@ Use AskUserQuestion (header: "Board"): "Is the board running and on the network?
 - **No, prepare a board** (description: "Build a kernel or drivers with ADI GMSL support and flash
   an SD card (Raspberry Pi, NXP) or the eMMC (NXP).")
 
-**Scope.** Unless the user explicitly asks for the GMSL setup only (for example "GMSL setup
-only", "only the camera setup", "do not flash/build anything"), the **entire pipeline** runs:
-`scope` = `full`. Words like "flash", "build" or "kernel" in the prompt do **not** skip Q1 or the
-assessment: the pipeline itself decides what is needed (a board on the network is never flashed:
-missing drivers are built for its running kernel; Yes path, "Does the board need building or
-flashing?"). With `scope` = `setup_only`, the run never builds or flashes anything:
-it only sets up a board that already has the ADI GMSL drivers. Store `scope` and tell the user in
-one line which scope the run uses and how to get the other one ("say 'GMSL setup only' to skip
-building and flashing").
+**What runs.** Words like "flash", "build" or "kernel" in the prompt do **not** skip Q1 or the
+assessment: the pipeline itself decides what is needed from the board's state (a board with the
+ADI GMSL drivers is set up directly; a board on the network is never flashed: missing drivers
+are built for its running kernel; Yes path, "Does the board need building or flashing?"). Every
+build starts only after the user agreed to its plan (common/9), so a user who does not want a
+build declines it there.
 
 Always ask Q1. The only shortcut: an IP address or hostname in the user's prompt means **Yes**
-(store it as `board_ip`; common/1 then starts at §Login). With `scope` = `setup_only`, the **No**
-answer cannot continue: tell the user that the setup needs a running board with the ADI GMSL
-drivers, and offer the full pipeline (header: "Scope"): **Run the full pipeline (Recommended)**
-(set `scope` = `full`, continue with the No path) | **Stop**. Store `entry` (`network` or
+(store it as `board_ip`; common/1 then starts at §Login). Store `entry` (`network` or
 `prepare`) and `flash_requested` (`True` when the prompt asked to flash or build).
 
 ### Yes path
@@ -220,14 +213,11 @@ from common/3 §Driver check:
 - **Drivers present:** nothing is built or flashed; continue with step 4. If the user asked to
   flash (`flash_requested`), say that the board is already running with the ADI GMSL drivers, so
   flashing is skipped.
-- **Drivers missing** and `scope` = `full`: patch the ADI GMSL drivers for the board's running
-  kernel and install them (the rules below).
-- **Drivers missing** and `scope` = `setup_only`: nothing is built or flashed. Tell the user which
-  drivers are missing (common/3 §Driver check) and offer (header: "Scope"): **Run the full
-  pipeline (Recommended)** (set `scope` = `full`, apply the rule below) | **Stop** (§Cleanup,
-  then a final message that says what is missing).
+- **Drivers missing:** patch the ADI GMSL drivers for the board's running kernel and install
+  them (the rules below), after the user agreed to the build plan. If the user declines it:
+  §Cleanup, then a final message that says which drivers are missing.
 
-**Drivers missing on a board on the network** (`scope` = `full`). Needs WSL or Linux and §Host
+**Drivers missing on a board on the network.** Needs WSL or Linux and §Host
 tools / §Sudo password of common/0. The drivers are built on the host for the kernel the board
 runs and installed into `updates/<subfolder>` on the board; nothing is reflashed:
 - **NXP-BSP board**: read `<skill dir>/nxp/1-kernel-modules.md` and follow §Live board (the
@@ -485,7 +475,7 @@ These apply to every step of every file until the end of the run:
 In addition to the log (read-only commands on the board; a failing command is not an error here):
 - After common/3 (the hardware answers): `<run_dir>/choices.json` with platform, board model,
   kernel release, deserializer, camera count, connector, adapter PHY, serializer and sensor per
-  camera, board address and user name, `scope`, `entry`, and which values were detected
+  camera, board address and user name, `entry`, and which values were detected
   automatically (no password). Rewrite it when an answer changes and when a value is detected
   later (kernel release, board address, login user): no `null` for a value the run knows.
 - After common/2: `assess_report.txt`, `running.dts`, `board.config` and the DTB list into
